@@ -279,3 +279,63 @@ BEGIN
     PRINT 'Somme : '+CAST(@somme AS CHAR(4));
 END;
 ----
+
+==== Correction exo 2
+[source,sql]
+----
+DECLARE @nb_heures_moyen INT
+
+SELECT @nb_heures_moyen = AVG(NB_HEURES_COURS_INFO)
+FROM PROCS.FORMATIONELEVES
+
+PRINT 'En moyenne les élèves ont: '+CAST(@nb_heures_moyen AS VARCHAR)+' heures de cours en moyenne'
+
+DECLARE @nom_ecole_max_heures VARCHAR(40)
+DECLARE @nb_heures_info_max DECIMAL(10,2)
+
+/* SELECT TOP 1 @nb_heures_info_max=NB_HEURES_COURS_INFO , @nom_ecole_max_heures=CODE_FILIERE
+FROM PROCS.FORMATIONELEVES */
+SELECT TOP 1 @nb_heures_info_max=SUM(NB_HEURES_COURS_INFO) , @nom_ecole_max_heures=CODE_FILIERE
+FROM PROCS.FORMATIONELEVES
+GROUP BY CODE_FILIERE
+ORDER BY SUM(NB_HEURES_COURS_INFO)
+
+PRINT 'Le nombre maximum d heures d nfo est de: '+CAST(@nb_heures_info_max AS VARCHAR)+' pour la formation: '+CAST(@nom_ecole_max_heures AS VARCHAR)
+----
+==== Correction exo 3
+[source,sql]
+----
+DECLARE @email VARCHAR(64) = 'contact@monsite.fr';
+
+DECLARE @arobasque_dans_email INT ;
+DECLARE @point_apres_arobasque INT ;
+
+SELECT @arobasque_dans_email = CHARINDEX('@', @email);
+SELECT @point_apres_arobasque = CHARINDEX('.', @email,@arobasque_dans_email+1);
+
+
+IF @arobasque_dans_email > 1 -- pas de '@' en première position
+   AND @point_apres_arobasque > @arobasque_dans_email + 1 -- il y a au moins un caractère entre '@' et '.'
+   AND @point_apres_arobasque < LEN(@email) -- le '.' n'est pas le dernier caractère
+   AND CHARINDEX('@', @email, @arobasque_dans_email + 1) = 0 -- un seul '@'
+   AND @point_apres_arobasque IS NOT NULL
+PRINT 'L email est Ok' ;
+ELSE
+PRINT 'L email est Ko' ;
+----
+
+==== Correction exo 4
+[source,sql]
+----
+DECLARE @code_produit VARCHAR(60) = 'PROD-2025-'
+DECLARE @compteur INT = 1
+
+WHILE @compteur <= 15
+BEGIN
+IF @compteur % 5 = 0
+PRINT @code_produit+FORMAT(@compteur,'00')+'(Lot de contrôle qualité)'
+ELSE PRINT @code_produit+FORMAT(@compteur,'00')
+
+SET @compteur = @compteur +1
+END
+----
