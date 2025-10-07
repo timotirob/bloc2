@@ -180,6 +180,11 @@ Le but est de manipuler des variables issues de calculs sur un ensemble de donn�
 === Exo 3 (Optionnel) : Création d'un sous-type
 
 Exécutez le code du fichier `EXPL_Type_Utilisateur.sql`.
+.Contenu du script EXPL_Type_Utilisateur.sql
+[source,sql]
+----
+include::scripts/EXPL_Type_Utilisateur.sql[]
+----
 
 . Expliquez ce que fait ce code.
 . Où sont stockées ces informations de type dans SQL Server ? (Utilisez l'explorateur d'objets)
