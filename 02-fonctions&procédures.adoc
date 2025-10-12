@@ -1,0 +1,123 @@
+= TP5 : Procédures Stockées et Fonctions Utilisateur
+Timothée Robert
+:doctype: article
+:encoding: utf-8
+:lang: fr
+:toc: left
+:toclevels: 3
+:icons: font
+:source-highlighter: rouge
+:rouge-style: github
+
+== Objectifs de la séance
+
+La semaine dernière, nous avons exploré les bases du langage Transact-SQL : variables, boucles et conditions. Aujourd'hui, nous allons encapsuler cette logique dans des objets persistants et réutilisables : les **procédures stockées ** et les **fonctions utilisateur (UDF)**.
+
+L'intérêt est majeur :
+
+* **Performance** : Le code est pré-compilé et stocké sur le serveur, réduisant les allers-retours réseau.
+* **Sécurité** : On peut donner des droits d'exécution sur une procédure sans en donner sur les tables sous-jacentes.
+* **Modularité** : Le code est centralisé, réutilisable et plus facile à maintenir.
+
+Nous allons transformer nos scripts en outils robustes et paramétrables.
+
+// -- PARTIE 1 : TRAVAUX PRATIQUES --
+
+== Exercice 1 : Ma Première Procédure (Analyse de filière)
+
+L'objectif est de transformer un script d'analyse simple en une procédure réutilisable, en y ajoutant progressivement des paramètres d'entrée et de sortie. Nous utiliserons la table `PROCS.FORMATIONELEVES`.
+
+[source,sql]
+----
+include::scripts/005-Script création table FormationEleves.sql[]
+----
+
+=== Étape 1 : Création d'une procédure simple
+
+Créez une procédure stockée nommée `CalculerMoyenneHeuresTotale` dans le schéma `PROCS`. Cette procédure ne prend aucun paramètre et doit simplement calculer et *afficher* (avec `PRINT`) le nombre d'heures de cours moyen de **tous** les élèves.
+
+TIP: La structure de base est `CREATE PROCEDURE ... AS BEGIN ... END;`. N'oubliez pas d'exécuter la procédure avec `EXEC PROCS.CalculerMoyenneHeuresTotale;` pour la tester.
+
+=== Étape 2 : Ajout d'un paramètre d'entrée
+
+Modifiez la procédure (avec `CREATE OR ALTER PROCEDURE`) pour qu'elle s'appelle désormais `CalculerMoyenneHeuresParFiliere`.
+Elle doit maintenant accepter un paramètre d'entrée `@filiere_code VARCHAR(10)`.
+Le calcul de la moyenne ne se fera que pour les élèves de la filière passée en paramètre.
+
+Testez-la avec différentes filières :
+[source,sql]
+----
+EXEC PROCS.CalculerMoyenneHeuresParFiliere @filiere_code = 'SLAM ENC';
+EXEC PROCS.CalculerMoyenneHeuresParFiliere @filiere_code = 'Ecole 42';
+----
+
+=== Étape 3 : Ajout d'un paramètre de sortie
+
+La bonne pratique est qu'une routine de calcul ne doit pas faire d'affichage. Modifiez à nouveau la procédure pour qu'elle ne fasse plus de `PRINT`.
+À la place, elle doit **retourner** le résultat via un paramètre de sortie `@moyenne_heures DECIMAL(8,2) OUTPUT`.
+
+Le programme appelant se chargera de déclarer une variable pour récupérer ce résultat et de l'afficher.
+
+NOTE: Un paramètre de sortie se déclare avec le mot-clé `OUTPUT` dans la signature de la procédure ET lors de son appel.
+
+== Exercice 2 : Procédure avec Logique Conditionnelle (Validateur de mot de passe)
+
+Créons un outil plus complexe : une procédure qui évalue la "force" d'un mot de passe selon des critères simples. C'est un excellent cas d'usage pour la logique `IF` et les fonctions de chaînes de caractères.
+
+Créez une procédure `VerifierForceMotDePasse` avec :
+
+* Un paramètre d'entrée : `@mot_de_passe VARCHAR(50)`
+* Un paramètre de sortie : `@score_force INT OUTPUT`
+
+La procédure doit calculer un score de la manière suivante :
+
+* Le score de base est 0.
+* **+1 point** si la longueur du mot de passe est d'au moins 8 caractères (`LEN`).
+* **+1 point** s'il contient au moins un chiffre (utilisez `PATINDEX('%[0-9]%')`).
+* **+1 point** s'il contient au moins une majuscule (utilisez `PATINDEX('%[A-Z]%')`).
+
+Testez votre procédure avec plusieurs mots de passe pour vérifier que le score retourné est correct.
+
+== Exercice 3 : Procédure "Rapport" (Le Capstone = dernière pierre)
+
+Cet exercice de synthèse vise à créer une procédure qui retourne un rapport complet sur une filière. Elle combine agrégats, recherche de maximum et gestion de plusieurs paramètres de sortie.
+
+Créez une procédure `EffectuerRapportFiliere` avec :
+
+* Un paramètre d'entrée : `@filiere_code VARCHAR(10)`
+* Trois paramètres de sortie :
+** `@nombre_eleves INT OUTPUT`
+** `@moyenne_heures DECIMAL(8,2) OUTPUT`
+** `@meilleur_eleve VARCHAR(50) OUTPUT`
+
+La procédure doit :
+
+1. Calculer le nombre total d'élèves dans la filière demandée.
+2. Calculer la moyenne d'heures de cours pour cette filière.
+3. Trouver le nom de l'élève ayant le plus d'heures de cours dans cette filière.
+4. Affecter ces trois résultats aux trois paramètres de sortie.
+
+TIP: Pour trouver le meilleur élève, la méthode `SELECT TOP 1 ... ORDER BY NB_HEURES_COURS_INFO DESC` est la plus efficace.
+
+== Exercice 4 (Optionnel) : Ma Première Fonction Scalaire (UDF)
+
+Les procédures sont puissantes, mais ne peuvent pas être utilisées directement dans une requête `SELECT`. C'est là que les fonctions excellent.
+Nous allons créer une fonction simple et pratique qui formate un nom complet.
+
+Créez une fonction scalaire nommée `FormaterNomComplet` dans le schéma `PROCS`.
+
+* Elle prend deux paramètres d'entrée : `@nom VARCHAR(50)` et `@prenom VARCHAR(50)`.
+* Elle retourne (`RETURNS`) une chaîne de caractères `VARCHAR(101)`.
+* La logique doit retourner le nom formaté comme suit : `NOM (en majuscules), Prénom`. Par exemple, `FormaterNomComplet('Robert', 'Timothée')` doit retourner `'ROBERT, Timothée'`.
+
+Utilisez les fonctions `UPPER()` et la concaténation `+`.
+
+Testez votre fonction directement dans une requête `SELECT` sur la table des élèves :
+[source,sql]
+----
+SELECT
+    PROCS.FormaterNomComplet(NOM_ELEVE, 'PrénomTest') AS NomFormate,
+    NB_HEURES_COURS_INFO
+FROM PROCS.FORMATIONELEVES;
+----
+
