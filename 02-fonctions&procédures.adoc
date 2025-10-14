@@ -9,19 +9,190 @@ Timothée Robert
 :source-highlighter: rouge
 :rouge-style: github
 
-== Objectifs de la séance
 
-La semaine dernière, nous avons exploré les bases du langage Transact-SQL : variables, boucles et conditions. Aujourd'hui, nous allons encapsuler cette logique dans des objets persistants et réutilisables : les **procédures stockées ** et les **fonctions utilisateur (UDF)**.
+== Introduction
 
-L'intérêt est majeur :
+=== Objectifs
 
-* **Performance** : Le code est pré-compilé et stocké sur le serveur, réduisant les allers-retours réseau.
-* **Sécurité** : On peut donner des droits d'exécution sur une procédure sans en donner sur les tables sous-jacentes.
-* **Modularité** : Le code est centralisé, réutilisable et plus facile à maintenir.
+Les déclencheurs (_triggers_) sont des outils de base de données avancés, de nouveau mis en avant dans le référentiel du BTS SIO option SLAM. Ils constituent une solution de défense en profondeur côté serveur face aux menaces de compromission de données, d’injection de code malveillant, de vols ou d’accès non autorisé.
 
-Nous allons transformer nos scripts en outils robustes et paramétrables.
+[IMPORTANT]
+====
+Le prérequis pour pouvoir étudier les déclencheurs est de connaître les procédures stockées et pour cela d’avoir des notions de Transact-SQL.
+====
 
-// -- PARTIE 1 : TRAVAUX PRATIQUES --
+=== Rappels
+
+La semaine dernière, nous avons vu les éléments essentiels du langage Transact-SQL :
+
+* Instructions et blocs
+* Variables : définition, `SET` et `SELECT`
+* Boucles
+* Conditions
+* Séquencement (`BREAK` et `CONTINUE`)
+
+---
+
+== Transact-SQL : Les routines
+
+=== Introduction
+
+Les routines sont des blocs de code nommés, avec une partie schéma (dbo par défaut) et une partie nom, qui sont précompilés et stockés dans la base de données. Elles sont accessibles via des vues systèmes.
+
+L’intérêt des routines en Transact-SQL est multiple :
+
+* **Sécurité** renforcée
+* **Intégrité** : certitude d’exécuter les traitements dans le bon ordre et dans des blocs cohérents.
+* **Productivité** : réutilisation, modularité (développement en équipe), extensibilité.
+* **Performance** : moins d’appels à la base de données.
+
+Les routines sont divisées en 3 groupes :
+
+.   **Procédures stockées** : Peuvent avoir des paramètres en entrée et en sortie. Utilisables via `EXEC`, dans des langages externes (C#, Java...) ou une autre procédure.
+.   **Fonctions** : Appelées UDF (_User Defined Function_). Utilisables dans une instruction LMD (SELECT, INSERT, UPDATE, DELETE) ou dans une procédure stockée.
+.   **Déclencheurs (Triggers)** : Routines qui s’exécutent en fonction d’un évènement donné sur un objet (INSERT, UPDATE...).
+
+.Schéma des routines en Transact-SQL
+image::routines_tsql.png[Les 3 types de routines : Procédures, Fonctions, Déclencheurs]
+
+NOTE: Nous aborderons aujourd’hui les procédures et les fonctions. Les déclencheurs seront vus à compter de la semaine prochaine.
+
+
+== Procédures stockées
+
+=== Éléments de syntaxe
+
+==== Syntaxe minimale
+[source,sql]
+----
+CREATE PROCEDURE schema.Nom (Paramètres) AS
+BEGIN
+    -- Corps de la procédure
+END
+----
+
+[NOTE]
+====
+Les paramètres peuvent être en entrée (par défaut) ou en sortie (en utilisant le mot-clé `OUTPUT`).
+====
+
+==== Syntaxe complète
+Pour la syntaxe complète, référez-vous à la documentation officielle de Microsoft.
+
+[WARNING]
+====
+**Terminologie** : Habituellement, une procédure ne retourne rien. En Transact-SQL, une procédure stockée *peut* retourner des valeurs via des paramètres `OUTPUT`, ce qui peut prêter à confusion.
+====
+
+=== Exemple
+
+==== Définition de la procédure
+[source,sql]
+----
+CREATE PROCEDURE EXEMPLE (@ENTREE VARCHAR(10) , @SORTIE VARCHAR(50) OUTPUT) AS
+BEGIN
+    -- ....
+END;
+----
+
+==== Appel de la procédure
+[source,sql]
+----
+DECLARE @VAL_SORTIE VARCHAR(50);
+EXEC EXEMPLE 'TEST ENTRE' , @VAL_SORTIE OUTPUT ;
+PRINT @VAL_SORTIE ;
+----
+NOTE: Lors de l'appel, on passe une valeur littérale pour le paramètre d'entrée, mais une variable pour le paramètre de sortie, car c'est la procédure qui va lui assigner une valeur.
+
+=== Accès aux procédures stockées
+
+Les procédures stockées sont accessibles dans la vue système `sys.procedures` et également dans la vue `sys.objects` avec le type `SQL_STORED_PROCEDURE`.
+
+=== Interaction avec la base de données
+
+==== Instructions INSERT
+La syntaxe est similaire au SQL standard, mais utilise des variables Transact-SQL. Les transactions sont gérées avec `BEGIN TRANSACTION` et se terminent par un `COMMIT TRANSACTION` (validation) ou un `ROLLBACK TRANSACTION` (annulation).
+
+.Exemple de INSERT en Transact-SQL
+[source,sql]
+----
+BEGIN TRANSACTION;
+DECLARE @nom_etudiant VARCHAR(50), @nb_heures INT, @nom_filiere VARCHAR(10);
+SET @nom_etudiant = 'ROBERT';
+SET @nb_heures = 1200;
+SET @nom_filiere = 'UNIV P1';
+
+INSERT INTO PROCS.FORMATIONELEVES VALUES(@nom_etudiant, @nb_heures, @nom_filiere);
+
+COMMIT TRANSACTION;
+----
+
+==== Instructions UPDATE et DELETE
+Le principe est identique à l'instruction `INSERT`, en utilisant des variables Transact-SQL.
+
+
+== Fonctions Utilisateurs (UDF)
+
+Une fonction utilisateur (UDF) peut être utilisée dans :
+
+* Une instruction SQL LMD (Langage de Manipulation de Données)
+* Une autre routine
+* Un autre langage de programmation
+* Une vue ou une vue indexée
+* La définition d’une colonne ou une contrainte `CHECK`
+
+=== Valeur de Retour
+
+Une UDF retourne soit :
+
+* Une **valeur unique** (fonction dite **scalaire**)
+* Une **table** (un ensemble de lignes et de colonnes)
+
+=== Limites de fonctionnalités
+[CAUTION]
+====
+Une UDF **ne peut pas** :
+
+* Mettre à jour une table ou une vue (`INSERT`, `DELETE`, `UPDATE`, `MERGE`).
+* Appeler une procédure stockée.
+* Contenir une transaction.
+
+Le principe est donc qu’une procédure stockée peut contenir des fonctions, mais l’inverse n’est pas vrai.
+====
+
+=== Fonction scalaire
+
+Une fonction scalaire retourne une valeur unique.
+
+.Syntaxe minimale d'une fonction scalaire
+[source,sql]
+----
+CREATE FUNCTION schema.Nom (Paramètres)
+RETURNS type_de_donnees
+AS
+BEGIN
+    -- Bloc d'instructions
+    RETURN expression;
+END
+----
+NOTE: La dernière instruction du bloc `BEGIN...END` doit toujours être un `RETURN`.
+
+=== Obtenir des informations sur les UDF
+
+La requête suivante permet de lister les UDF de la base de données courante.
+
+[source,sql]
+----
+SELECT
+    m.DEFINITION,
+    o.TYPE
+FROM
+    SYS.SQL_MODULES AS m
+INNER JOIN
+    SYS.OBJECTS AS o ON m.OBJECT_ID = o.OBJECT_ID
+WHERE
+    o.type IN ('FN', 'IF', 'TF');
+----
 
 == Exercice 1 : Ma Première Procédure (Analyse de filière)
 
