@@ -292,3 +292,40 @@ SELECT
 FROM PROCS.FORMATIONELEVES;
 ----
 
+== Correction
+=== Exo 1 Etape 1
+
+[source,sql]
+----
+CREATE OR ALTER PROCEDURE PROCS.CalculerMoyenneHeuresTotale AS
+BEGIN
+DECLARE @nb_heures DECIMAL(10,2);
+SELECT @nb_heures = AVG(NB_HEURES_COURS_INFO)
+FROM PROCS.FORMATIONELEVES
+PRINT 'le nombre d’heures de cours moyen de tous les élèves est:'+CAST(@nb_heures AS VARCHAR(20))
+END
+----
+Exécution :
+[source,sql]
+----
+EXEC PROCS.CalculerMoyenneHeuresTotale;
+----
+
+=== Exo 1 Etape 2
+[source,sql]
+----
+CREATE OR ALTER PROCEDURE PROCS.CalculerMoyenneHeuresParFiliere (@FILIERE VARCHAR(10) )  AS
+BEGIN
+DECLARE @nb_heures DECIMAL(10,2);
+SELECT @nb_heures = AVG(NB_HEURES_COURS_INFO)
+FROM PROCS.FORMATIONELEVES
+WHERE CODE_FILIERE = @FILIERE
+PRINT 'le nombre d’heures de cours moyen de tous les élèves est:'+CAST(@nb_heures AS VARCHAR(20))
+END
+----
+Exécution :
+[source,sql]
+----
+EXEC PROCS.CalculerMoyenneHeuresParFiliere @filiere_code = 'SLAM ENC';
+EXEC PROCS.CalculerMoyenneHeuresParFiliere @filiere_code = 'Ecole 42';
+----
