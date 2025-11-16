@@ -14,7 +14,7 @@
 
 Nous avons déjà examiné les procédures stockées et les fonctions (UDF). Cette séquence aborde les **déclencheurs (triggers)**, un troisième type de routine SQL.
 
-Un déclencheur est un sous-programme (similaire à une procédure stockée) qui est **automatiquement exécuté** en réponse à un **événement** spécifique survenant dans la base de données[cite: 257].
+Un déclencheur est un sous-programme (similaire à une procédure stockée) qui est **automatiquement exécuté** en réponse à un **événement** spécifique survenant dans la base de données.
 
 === Le Concept de "Défense en Profondeur"
 
@@ -33,7 +33,7 @@ On distingue trois grandes familles d'événements pouvant activer un déclenche
 Les plus courants. Ils réagissent aux événements `INSERT`, `UPDATE`, ou `DELETE` sur une table ou une vue spécifique.
 
 * **Déclencheurs LDD (Langage de Définition de Données)** :
-Ils réagissent aux événements qui modifient la structure de la base ou du serveur, tels que `CREATE_TABLE`, `ALTER_INDEX`, `DROP_VIEW` [cite: 272-275]. Très utiles pour les pistes d'audit.
+Ils réagissent aux événements qui modifient la structure de la base ou du serveur, tels que `CREATE_TABLE`, `ALTER_INDEX`, `DROP_VIEW` . Très utiles pour les pistes d'audit.
 
 * **Déclencheurs de Connexion (Logon)** :
 Un type spécifique qui se déclenche lorsqu'un utilisateur ouvre une session sur le serveur (`LOGON`).
@@ -82,9 +82,27 @@ Ces tables sont essentielles pour savoir *quelles données* ont été affectées
 === Cas d'Usage LMD (AFTER)
 
 .Exemple 1 : Audit simple (trg_AfterInsert_Employee)
-[CAHIER-EXEMPLE: `DOC1-EXPL1`]
 L'objectif est de remplir une table `EmployeeAudit` à chaque fois qu'un nouvel employé est ajouté.
 
+.Script des tables (Audit)
+[source,sql]
+----
+CREATE TABLE Employee (
+    EmployeeID INT IDENTITY(1,1) PRIMARY KEY,
+    FirstName NVARCHAR(50),
+    LastName NVARCHAR(50),
+    Salary DECIMAL(10, 2),
+    HireDate DATE
+);
+
+CREATE TABLE EmployeeAudit (
+    AuditID INT IDENTITY(1,1) PRIMARY KEY,
+    EmployeeID INT,
+    Operation NVARCHAR(50),
+    OperationDate DATETIME
+);
+----
+.Script du déclencheur (Audit)
 [source,sql]
 ----
 CREATE OR ALTER TRIGGER trg_AfterInsert_Employee
@@ -98,10 +116,70 @@ BEGIN
 END;
 ----
 
-.Exemple 2 : Validation complexe (Limite de compétences)
-[CAHIER-EXEMPLE: `DOC2-025`]
-L'objectif est d'empêcher l'ajout de plus de 4 langages pour un élève.
+.Exemple 2 : Validation complexe (Format Numéro Téléphone)
+L'objectif est de forcer un format `XX-XX-XX-XX-XX` pour le `NUMERO_TELEPHONE`.
 
+.Script du déclencheur (Validation Format)
+[source,sql]
+----
+CREATE TABLE CLIENTS (
+    CLIENT_ID INT IDENTITY(1,1) PRIMARY KEY,
+    NOM NVARCHAR(50),
+    PRENOM NVARCHAR(50),
+    NUMERO_TELEPHONE NVARCHAR(15)
+);
+GO
+
+CREATE TRIGGER trg_VERIFIE_NUMERO_TELEPHONE
+ON CLIENTS
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    -- On vérifie si une ligne insérée/mise à jour
+    -- ne respecte PAS le format
+    IF EXISTS (
+        SELECT * FROM INSERTED
+        WHERE NUMERO_TELEPHONE NOT LIKE '[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]')
+    BEGIN
+        -- Si c'est le cas, on lève une erreur et on annule la transaction
+        RAISERROR ('Le numéro de téléphone doit être au format XX-XX-XX-XX-XX.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END;
+END;
+GO
+----
+
+.Exemple 3 : Historisation (Mer et Soleil)
+L'objectif est d'archiver toute location supprimée de la table `Location` vers la table `HistoLoc`.
+
+.Script de la table
+[source,sql]
+----
+include::scripts/Données Mer et Soleil.sql[]
+----
+
+.Script du déclencheur (Historisation)
+[source,sql]
+----
+CREATE OR ALTER TRIGGER MERSOLEIL.HistoLocation
+ON MERSOLEIL.Location
+FOR DELETE
+AS
+INSERT INTO MERSOLEIL.HistoLoc (DateHisto,Numloc, NumSem, NumStu, NumCli, Regle, PrixLoc)
+SELECT GetDate(),Numloc, NumSem, NumStu, NumCli, Regle, PrixLoc
+FROM deleted
+----
+
+.Exemple 4 : Validation métier (Limite de compétences)
+L'objectif est d'empêcher l'ajout de plus de 4 langages pour un élève (utilise le setup du TP2).
+
+Script de la table
+[source,sql]
+----
+include::scripts/005-Script création table FormationEleves.sql[]
+----
+
+.Script du déclencheur (Validation Métier)
 [source,sql]
 ----
 CREATE OR ALTER TRIGGER PROCS.E_CMP_I_LANGUEINF
@@ -123,10 +201,10 @@ BEGIN
 END;
 ----
 
-.Exemple 3 : Formatage de données (Mer et Soleil)
-[CAHIER-EXEMPLE: `DOC3-EXPL1`]
+.Exemple 5 : Formatage de données (Mer et Soleil)
 L'objectif est de s'assurer que le `NomCli` est toujours en majuscules.
 
+.Script du déclencheur (Formatage)
 [source,sql]
 ----
 CREATE TRIGGER NomEnMaj
@@ -143,7 +221,7 @@ FROM Client INNER JOIN inserted
 
 Les triggers `INSTEAD OF` sont souvent utilisés sur des vues pour "traduire" une opération (comme un `INSERT`) en plusieurs opérations sur les tables de base sous-jacentes.
 
-.Exemple : Insertion via une vue (Brouard, `DOC2-15`)
+.Exemple : Insertion via une vue (Brouard)
 On crée une vue `V_instructeur_ins` qui joint `T_pilote_pil` et `T_instructeur_ins`. Un `INSERT` direct sur cette vue échouerait. Le trigger `INSTEAD OF` intercepte l'ordre et le dispatche correctement dans les two tables mères.
 
 [source,sql]
@@ -175,11 +253,11 @@ END;
 GO
 ----
 
-=== Partie 2 : Déclencheurs LDD (SQL Server)
+== Partie 2 : Déclencheurs LDD (SQL Server)
 
 Ces déclencheurs surveillent les modifications de la *structure* de la base.
 
-.Exemple : Audit des modifications de structure (Brouard, `DOC2-15`)
+.Exemple : Audit des modifications de structure (Brouard)
 Ce trigger se déclenche `ON DATABASE` pour les événements `DROP_TABLE`, `DROP_INDEX`, `ALTER_TABLE`. Il loggue l'événement dans une table `evenements` et peut annuler l'action (ici, le week-end).
 
 [source,sql]
@@ -227,11 +305,11 @@ END;
 GO
 ----
 
-=== Partie 3 : Déclencheurs de Connexion (SQL Server)
+== Partie 3 : Déclencheurs de Connexion (SQL Server)
 
 Ces triggers s'exécutent sur l'événement `LOGON` et sont définis au niveau du **serveur**.
 
-.Exemple : Limiter les heures de connexion (Brouard, `DOC2-15`)
+.Exemple : Limiter les heures de connexion (Brouard)
 Ce trigger `ON ALL SERVER` empêche un utilisateur spécifique (`util_heure_ouv`) de se connecter en dehors des heures ouvrées (9h-16h).
 
 [source,sql]
@@ -248,31 +326,256 @@ END;
 GO
 ----
 
-=== Partie 4 : TP SQL Server
+== Partie 4 : TP SQL Server
 
-.TP 1 : Étude de Cas "Mer et Soleil"
-(Basé sur `DOC3-035` et `DOC3-TP`)
+=== TP 1 : Étude de Cas "Mer et Soleil"
 
 * **Contexte**: Gestion de locations. Le `CA` est un champ dénormalisé dans `CLIENT` qui doit être maintenu. `HISTOLOC` archive les suppressions.
+* **Données**: Script `Données Mer et Soleil.sql`
+
+Script de la table
+[source,sql]
+----
+include::scripts/Données Mer et Soleil.sql[]
+----
+
 * **Exercice 1**:
 1.  *Initialisation*: Mettre à jour le champ `CA` de `CLIENT` pour qu'il reflète la somme des `PrixLoc`.
-2.  *Formatage*: Modifier le trigger `NomEnMaj` pour `NomCli` en `UPPER` et `PrenomCli` avec `Initiale en Majuscule`.
-3.  *Historisation*: Tester le trigger `HistoLocation` (vu en cours) lors d'un `DELETE` sur `Location`.
-4.  *MAJ du CA*: Créer un **nouveau déclencheur** sur `LOCATION` (pour `INSERT`, `UPDATE`, `DELETE`) qui met à jour le `CA` du client correspondant dans la table `CLIENT`.
++
 
-.TP 2 : "Formation des Élèves"
-(Basé sur `DOC2-025` et `SEANCE6-DOC2-TP`)
+
+SOLUTION
+[source,sql]
+----
+-- Solution 1: Initialisation du CA
+UPDATE MERSOLEIL.CLIENT
+SET CA = (
+    SELECT SUM(l.PrixLoc)
+    FROM MERSOLEIL.LOCATION l
+    WHERE l.NumCli = MERSOLEIL.CLIENT.NumCli
+)
+WHERE EXISTS (
+    SELECT 1
+    FROM MERSOLEIL.LOCATION l
+    WHERE l.NumCli = MERSOLEIL.CLIENT.NumCli
+);
+----
++
+2.  *Formatage*: Modifier le trigger `NomEnMaj` pour `NomCli` en `UPPER` et `PrenomCli` avec `Initiale en Majuscule`.
++
+
+
+SOLUTION
+[source,sql]
+----
+-- Solution 2: Amélioration du trigger de formatage
+CREATE OR ALTER TRIGGER MERSOLEIL.trg_Formatage_Client
+ON MERSOLEIL.Client
+FOR INSERT, UPDATE
+AS
+UPDATE MERSOLEIL.CLIENT
+SET
+    NomCli = UPPER(i.NomCli),
+    PrenomCli = UPPER(LEFT(i.PrenomCli, 1)) + LOWER(SUBSTRING(i.PrenomCli, 2, LEN(i.PrenomCli)))
+FROM
+    MERSOLEIL.CLIENT c
+INNER JOIN
+    inserted i ON c.NumCli = i.NumCli;
+GO
+
+-- Test (l'ancien trigger NomEnMaj est remplacé)
+INSERT INTO MERSOLEIL.CLIENT (GENRECLI, NOMCLI, PRENOMCLI, CA)
+VALUES ('H', 'durand', 'pascal', 0);
+
+SELECT * FROM MERSOLEIL.CLIENT WHERE NOMCLI = 'DURAND';
+----
++
+3.  *Historisation*: Tester le trigger `HistoLocation` (cf ci dessous) lors d'un `DELETE` sur `Location`.
+
+[source,sql]
+----
+CREATE OR ALTER TRIGGER MERSOLEIL.HistoLocation
+ON MERSOLEIL.Location
+FOR DELETE
+AS
+INSERT INTO MERSOLEIL.HistoLoc (DateHisto,Numloc, NumSem, NumStu, NumCli, Regle, PrixLoc)
+SELECT GetDate(),Numloc, NumSem, NumStu, NumCli, Regle, PrixLoc
+FROM deleted
+----
+
+
+SOLUTION
+[source,sql]
+----
+-- Solution 3: Test d'historisation (le trigger est dans les exemples de cours)
+
+-- Vérifier l'état avant
+SELECT * FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+SELECT * FROM MERSOLEIL.HISTOLOC;
+
+-- Test
+DELETE FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+
+-- Vérifier l'état après
+SELECT * FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+SELECT * FROM MERSOLEIL.HISTOLOC;
+----
++
+4.  *MAJ du CA*: Créer un **nouveau déclencheur** sur `LOCATION` (pour `INSERT`, `UPDATE`, `DELETE`) qui met à jour le `CA` du client correspondant dans la table `CLIENT`.
++
+
+
+SOLUTION
+[source,sql]
+----
+-- Solution 4: Trigger de mise à jour du CA
+CREATE OR ALTER TRIGGER MERSOLEIL.trg_Update_CA_Client
+ON MERSOLEIL.LOCATION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Cas 1: INSERTION
+    -- On ajoute le PrixLoc des nouvelles locations au CA du client concerné
+    UPDATE c
+    SET c.CA = c.CA + i.TotalPrix
+    FROM MERSOLEIL.CLIENT c
+    INNER JOIN (
+        SELECT NumCli, SUM(PrixLoc) AS TotalPrix
+        FROM inserted
+        GROUP BY NumCli
+    ) AS i ON c.NumCli = i.NumCli;
+
+    -- Cas 2: SUPPRESSION
+    -- On soustrait le PrixLoc des anciennes locations du CA du client concerné
+    UPDATE c
+    SET c.CA = c.CA - d.TotalPrix
+    FROM MERSOLEIL.CLIENT c
+    INNER JOIN (
+        SELECT NumCli, SUM(PrixLoc) AS TotalPrix
+        FROM deleted
+        GROUP BY NumCli
+    ) AS d ON c.NumCli = d.NumCli;
+
+    -- Cas 3: UPDATE
+    -- Un UPDATE est vu comme un DELETE de l'ancienne ligne (bloc 2)
+    -- et un INSERT de la nouvelle ligne (bloc 1).
+END;
+GO
+
+-- Test
+SELECT NumCli, CA FROM MERSOLEIL.CLIENT WHERE NumCli = 3; -- Client 'Dupond'
+-- CA initial (après étape 1) doit être 0
+
+-- Insérer une location pour le client 3
+INSERT INTO MERSOLEIL.LOCATION (NumStu, NumCli, NumSem, REGLE, PrixLoc)
+VALUES (1, 3, 30, 1, 650);
+
+-- Vérifier
+SELECT NumCli, CA FROM MERSOLEIL.CLIENT WHERE NumCli = 3; -- CA devrait être 650
+
+-- Modifier la location
+UPDATE MERSOLEIL.LOCATION SET PrixLoc = 700 WHERE NumCli = 3;
+
+-- Vérifier
+SELECT NumCli, CA FROM MERSOLEIL.CLIENT WHERE NumCli = 3; -- CA devrait être 700
+
+-- Supprimer la location
+DELETE FROM MERSOLEIL.LOCATION WHERE NumCli = 3;
+
+-- Vérifier
+SELECT NumCli, CA FROM MERSOLEIL.CLIENT WHERE NumCli = 3; -- CA devrait être 0
+----
+
+=== TP 2 : "Formation des Élèves"
 
 * **Contexte**: Gérer les compétences et méthodes des élèves.
+* **Données**: Script ci dessous `Exemple Trigger Insert et Delete.sql` (contient le setup et le premier trigger).
+
+Script de la table
+[source,sql]
+----
+include::scripts/Exemple Trigger Insert et Delete.sql[]
+----
+
 * **Exercice 1**:
 1.  Tester le trigger `E_CMP_I_LANGUEINF` (vu en cours) jusqu'à ce qu'il bloque l'insertion.
++
+[source,sql]
+----
+-- Solution 1: Test (en supposant l'élève 1 existe)
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'C#');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'Python');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'Java');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'PHP');
+-- La 5ème insertion doit échouer
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'SQL');
+----
++
 2.  Ajouter une table `COMPETENCE_METHODE` (AGILE, UML, GIT, DEVOPS...).
++
+[source,sql]
+----
+-- Solution 2: Création de la table et ajout de la colonne compteur
+CREATE TABLE PROCS.COMPETENCE_METHODE (
+    ID_ELEVE INT NOT NULL,
+    METHODE VARCHAR(50) NOT NULL,
+    PRIMARY KEY (ID_ELEVE, METHODE)
+);
+
+-- Ajout du compteur dans la table élève
+ALTER TABLE PROCS.FORMATIONELEVES
+ADD NB_METHODE INT DEFAULT 0;
+----
++
 3.  Créer un nouveau trigger sur `COMPETENCE_METHODE` empêchant l'insertion au-delà de 2 méthodes par élève.
++
+[source,sql]
+----
+-- Solution 3: Trigger de limitation des méthodes
+CREATE OR ALTER TRIGGER PROCS.trg_Limit_Methode
+ON PROCS.COMPETENCE_METHODE
+AFTER INSERT
+AS
+BEGIN
+    DECLARE @ID_ELEVE_INS INT;
+    SELECT @ID_ELEVE_INS = ID_ELEVE FROM inserted;
 
-.TP 3 : "Compagnie Aérienne" (Brouard)
-(Basé sur `SEANCE7-DOC2-TP` et `DOC2-15`)
+    DECLARE @NB_METHODE INT;
+    SELECT @NB_METHODE = ISNULL(NB_METHODE, 0)
+    FROM PROCS.FORMATIONELEVES
+    WHERE ID_ELEVE = @ID_ELEVE_INS;
 
-* **Contexte**: Gestion des pilotes et de leurs qualifications. [cite_start]La table `T_pilote_pil` contient un champ dénormalisé `pil_nbqualif` qui compte les qualifications de `T_qualifs_qua` .
+    IF @NB_METHODE < 2
+    BEGIN
+        -- Mettre à jour le compteur
+        UPDATE PROCS.FORMATIONELEVES
+        SET NB_METHODE = @NB_METHODE + 1
+        WHERE ID_ELEVE = @ID_ELEVE_INS;
+    END
+    ELSE
+    BEGIN
+        -- Annuler et lever une erreur
+        ROLLBACK TRANSACTION;
+        THROW 50010, 'Limite de 2 méthodes atteintes pour cet élève.', 1;
+    END;
+END;
+GO
+
+-- Test
+INSERT INTO PROCS.COMPETENCE_METHODE(ID_ELEVE, METHODE) VALUES (1, 'AGILE');
+INSERT INTO PROCS.COMPETENCE_METHODE(ID_ELEVE, METHODE) VALUES (1, 'UML');
+-- La 3ème insertion doit échouer
+INSERT INTO PROCS.COMPETENCE_METHODE(ID_ELEVE, METHODE) VALUES (1, 'GIT');
+
+SELECT * FROM PROCS.FORMATIONELEVES WHERE ID_ELEVE = 1;
+----
+
+=== TP 3 : "Compagnie Aérienne" (Brouard)
+
+* **Contexte**: Gestion des pilotes et de leurs qualifications. La table `T_pilote_pil` contient un champ dénormalisé `pil_nbqualif` qui compte les qualifications de `T_qualifs_qua`.
+* **Données**: Script `DOC2-15 - Déclencheurs livre Brouard SQL Server.sql`
 * **Exercice 1 : Déclencheur `AFTER DELETE`**
 * *Objectif*: Quand on supprime une qualification (`DELETE` sur `T_qualifs_qua`), décrémenter le compteur `pil_nbqualif` du pilote concerné dans `T_pilote_pil`.
 * *Solution (Brouard, `DOC2-15`)*:
@@ -302,7 +605,7 @@ ON T_qualifs_qua AFTER INSERT AS
 BEGIN
  DECLARE @nb_qualifs TINYINT;
 
- -- Suppose un seul insert. Pour plusieurs, il faut un curseur (cf script 7-50)
+ -- Note: Suppose un seul insert. Pour plusieurs, il faudrait un curseur.
  SELECT @nb_qualifs = pil_nbqualif FROM T_pilote_pil
    WHERE pil_brevet = (SELECT pil_brevet FROM INSERTED);
 
@@ -365,11 +668,10 @@ IF UPDATE(pil_brevet)
 END;
 ----
 
-* **Scripts de Données (SQL Server)**
-* `DOC2-15 - Déclencheurs livre Brouard SQL Server.sql` (Contient la création des tables et les triggers)
+* **Scripts de Données Complémentaires (SQL Server)**
 * `DOC2-05_Brouard Sous requêtes_Etudiant.sql` (Jeu de données alternatif Air France)
 * `DOC2-10_Reinitialise Cours Brouard Etudiants.sql` (Script de nettoyage)
-* `DOC3-035-Données Mer et Soleil.sql` (Jeu de données Mer et Soleil)
+
 
 == Partie 5 : Déclencheurs sur MySQL
 
@@ -404,13 +706,11 @@ CREATE
     trigger_body
 ----
 
-* [cite_start]`trigger_time` : `BEFORE` ou `AFTER`[cite: 21].
-* `trigger_event` : `INSERT`, `UPDATE`, ou `DELETE`[cite: 22].
+* `trigger_time` : `BEFORE` ou `AFTER`.
+* `trigger_event` : `INSERT`, `UPDATE`, ou `DELETE`.
 * `trigger_body` : Le code du trigger, souvent encapsulé dans `BEGIN ... END;`.
 
 == Partie 6 : Étude de Cas MySQL "Easy2Drive"
-
-(Basé sur `SEANCE8-Déclencheurs-Extrait EDC.docx` et les scripts MySQL)
 
 === Contexte et Mission
 
@@ -433,11 +733,11 @@ SerieTest (id, theme)
 ExamenBlanc (id, nom)
   PK: id
 
-Evaluer (idEleve, idSerieTest, dateHeure, evaluerScore)
+Evaluer (idEleve, idSerieTest, dateHeire, evaluerScore)
   PK: (idEleve, idSerieTest, dateHeure)
   FK: idEleve -> Eleve(idUtilisateur)
 
-Passer (idEleve, idExamenBlanc, dateHeure, examenScore)
+Passer (idEleve, idExamenBlanc, dateHeire, examenScore)
   PK: (idEleve, idExamenBlanc, dateHeure)
   FK: idEleve -> Eleve(idUtilisateur)
 ----
@@ -453,14 +753,14 @@ L'élève doit:
 
 === Code du Déclencheur (Original)
 
-Voici le code MySQL du trigger existant (issu de `DOC B2` et `SEANCE8 -02 - Déclencheur EDC MySQL.sql`).
+Voici le code MySQL du trigger existant (issu de `SEANCE8 -02 - Déclencheur EDC MySQL.sql`).
 
 [source,mysql]
 ----
 DELIMITER $$
 CREATE TRIGGER IF NOT EXISTS check_garantie_reussite
 BEFORE UPDATE -- Se déclenche AVANT la MAJ
-ON Eleve -- Sur la table Eleve [cite: 121]
+ON Eleve -- Sur la table Eleve
 FOR EACH ROW -- Pour chaque ligne modifiée
 BEGIN
     DECLARE v_nbSerie INT;
@@ -495,7 +795,7 @@ BEGIN
     ) AS MeilleureNotes;
     IF v_scoreMoyen < 34 THEN
         SIGNAL SQLSTATE '10005'
-        SET MESSAGE_TEXT = 'Garantie réussite : score examens blancs insuffisant'; [cite: 141-144]
+        SET MESSAGE_TEXT = 'Garantie réussite : score examens blancs insuffisant';
     END IF;
 
 -- Garantie Réussite attribuée (implicitement si aucune erreur n'est levée)
@@ -507,10 +807,143 @@ DELIMITER ;
 
 * **Question B.1.2**:
 a) Analyser le corps du déclencheur et repérer les conditions qui ne sont pas ou mal implémentées.
++
+.Solution Analyse (a)
+L'analyse du déclencheur `check_garantie_reussite` révèle plusieurs problèmes :
++
+* **Condition 2 (Nb examens blancs)** : Elle est **totalement absente**. Le code vérifie le nombre de séries (Condition 1) mais n'a aucune ligne pour vérifier le `COUNT(*)` de la table `Passer` (minimum 4).
+* **Condition 4 (Échec trop ancien)** : La logique est **inversée**.
+* Le code original est : `IF DATE_ADD(NEW.dateEtg, INTERVAL 6 MONTH) >= NOW() THEN SIGNAL ... 'échec trop ancien'`.
+* `DATE_ADD(NEW.dateEtg, INTERVAL 6 MONTH) >= NOW()` signifie que la date d'examen + 6 mois est *dans le futur* (ou aujourd'hui), ce qui veut dire que l'échec date de *moins* de 6 mois.
+* Le trigger lève donc une erreur lorsque la condition est *valide*. Il devrait lever une erreur si la condition est `... < NOW()`.
+* **Condition 5 (Deuxième échec)** : Le trigger vérifie `OLD.echecEtg = 1 AND NEW.echecEtg = 1`. Cela semble correct pour empêcher une *deuxième* déclaration, mais le trigger ne se déclenche que sur `UPDATE`. Que se passe-t-il si l'auto-école tente de *passer* `echecETG` de `0` à `1` alors que la `garantieReussite` est déjà à `1` (suite à un premier échec remboursé) ? Le trigger devrait plutôt vérifier `IF NEW.echecEtg = 1 AND OLD.garantieReussite = 1 THEN ...`. (Note: la vérification actuelle est celle attendue par le sujet, mais elle est contournable).
+
 b) Écrire le code source corrigé du déclencheur (uniquement les parties à modifier ou à ajouter).
++
+.Solution Code Corrigé (b)
+Voici le corps complet du `BEGIN ... END` corrigé, incluant la Condition 2 manquante et la logique inversée de la Condition 4.
++
+[source,mysql]
+----
+BEGIN
+    DECLARE v_nbSerie INT;
+    DECLARE v_nbExamen INT; -- Ajout
+    DECLARE v_scoreMoyen DOUBLE;
+
+    -- On ne vérifie les conditions QUE si l'auto-école
+    -- tente de déclarer un échec (passage de 0 à 1)
+    IF OLD.echecEtg = 0 AND NEW.echecEtg = 1 THEN
+
+        -- Gérer condition 5 (deuxième échec - ou plutôt, déjà remboursé)
+        -- Si la garantie est déjà à 1, on ne peut pas re-déclarer un échec
+        IF OLD.garantieReussite = 1 THEN
+            SIGNAL SQLSTATE '10001'
+            SET MESSAGE_TEXT = 'Garantie réussite : ne peut être accordée qu une seule fois.';
+        END IF;
+
+        -- Gérer condition 4 (échec trop ancien) - LOGIQUE CORRIGÉE
+        -- L'erreur est levée si la date + 6 mois est DÉJÀ PASSÉE
+        IF DATE_ADD(NEW.dateEtg, INTERVAL 6 MONTH) < NOW() THEN
+            SIGNAL SQLSTATE '10002'
+            SET MESSAGE_TEXT = 'Garantie réussite : échec datant de plus de 6 mois.';
+        END IF;
+
+        -- Gérer condition 1 (nb séries)
+        SELECT COUNT(*) INTO v_nbSerie FROM Evaluer WHERE idEleve = NEW.idUtilisateur;
+        IF v_nbSerie < 25 THEN
+            SIGNAL SQLSTATE '10003'
+            SET MESSAGE_TEXT = 'Garantie réussite : nombre de séries insuffisant (< 25).';
+        END IF;
+
+        -- Gérer condition 2 (nb examens blancs) - CONDITION AJOUTÉE
+        SELECT COUNT(*) INTO v_nbExamen FROM Passer WHERE idEleve = NEW.idUtilisateur;
+        IF v_nbExamen < 4 THEN
+            SIGNAL SQLSTATE '10004' -- Nouveau code d'erreur
+            SET MESSAGE_TEXT = 'Garantie réussite : nombre d examens blancs insuffisant (< 4).';
+        END IF;
+
+        -- Gérer condition 3 (moyenne examens blancs)
+        SELECT AVG(examenScore) INTO v_scoreMoyen FROM (
+            SELECT examenScore FROM Passer
+            WHERE idEleve = NEW.idUtilisateur
+            ORDER BY examenScore DESC LIMIT 4
+        ) AS MeilleureNotes;
+
+        -- S'il n'y a pas de notes (v_scoreMoyen est NULL), le test échoue
+        IF v_scoreMoyen < 34 OR v_scoreMoyen IS NULL THEN
+            SIGNAL SQLSTATE '10005'
+            SET MESSAGE_TEXT = 'Garantie réussite : score moyen aux examens blancs insuffisant (< 34).';
+        END IF;
+
+        -- Si toutes les conditions sont passées, on attribue la garantie
+        SET NEW.garantieReussite = 1;
+
+    END IF;
+END
+----
 
 * **Exercice Pratique**:
 Écrivez des instructions `UPDATE` pour déclencher successivement chacun des messages d'erreur (SQLSTATE 10001, 10002, etc.) . Si besoin, ajoutez les données nécessaires pour provoquer ces déclenchements.
++
+.Solution Exercice Pratique
+(Basé sur les données de `SEANCE8 -01- Table Eleve Easy2Driver MySQL.sql` et le trigger corrigé)
++
+[source,mysql]
+----
+-- Pré-requis : l'élève 3 (id=3) n'a ni échec, ni série, ni examen.
+-- L'élève 1 (id=1) a 5 examens (scores 29,30,32,33,35) -> Moyenne Top 4 = 32.5
+-- L'élève 1 a 30 séries.
+-- L'élève 1 a déjà echecETG=1 et garantieReussite=1.
+
+-- Test 10001 (Deuxième échec sur garantie déjà accordée)
+-- L'élève 1 a déjà 'garantieReussite = 1'.
+-- On simule un passage de 0 à 1 (on le remet à 0 d'abord)
+UPDATE Eleve SET echecETG = 0 WHERE idUtilisateur = 1;
+-- Cette UPDATE déclenche le trigger (passage 0 -> 1)
+UPDATE Eleve SET echecETG = 1, dateETG = CURDATE() WHERE idUtilisateur = 1;
+-- -> ERREUR 10001: 'Garantie réussite : ne peut être accordée qu une seule fois.'
+
+
+-- Test 10002 (Échec trop ancien)
+-- On utilise l'élève 3 (qui n'a pas de garantie)
+UPDATE Eleve
+SET echecETG = 1, dateETG = '2020-01-01'
+WHERE idUtilisateur = 3;
+-- -> ERREUR 10002: 'Garantie réussite : échec datant de plus de 6 mois.'
+
+
+-- Test 10003 (Nb séries insuffisant)
+-- L'élève 2 (id=2) a 15 séries (donc < 25)
+-- On le remet à 0 (il a echecETG=1)
+UPDATE Eleve SET echecETG = 0 WHERE idUtilisateur = 2;
+-- On teste
+UPDATE Eleve
+SET echecETG = 1, dateETG = CURDATE()
+WHERE idUtilisateur = 2;
+-- -> ERREUR 10003: 'Garantie réussite : nombre de séries insuffisant (< 25).'
+
+
+-- Test 10004 (Nb examens blancs insuffisant)
+-- L'élève 3 (id=3) n'a aucun examen blanc.
+-- On lui ajoute 30 séries pour passer le test 10003 (non simulé ici, supposé fait)
+-- ...
+-- On teste (l'élève 3 a 0 examens)
+UPDATE Eleve
+SET echecETG = 1, dateETG = CURDATE()
+WHERE idUtilisateur = 3;
+-- -> ERREUR 10004: 'Garantie réussite : nombre d examens blancs insuffisant (< 4).'
+
+
+-- Test 10005 (Score moyen insuffisant)
+-- L'élève 1 a 30 séries (>25), 5 examens (>4), mais une moyenne de 32.5 (<34).
+-- On réinitialise son statut (echec=0, garantie=0)
+UPDATE Eleve SET echecETG = 0, garantieReussite = 0 WHERE idUtilisateur = 1;
+-- On teste
+UPDATE Eleve
+SET echecETG = 1, dateETG = CURDATE()
+WHERE idUtilisateur = 1;
+-- -> ERREUR 10005: 'Garantie réussite : score moyen aux examens blancs insuffisant (< 34).'
+----
 
 * **Scripts de Données (MySQL)**
 * `SEANCE8 -01- Table Eleve Easy2Driver MySQL.sql` (Jeu de données Easy2Drive)
