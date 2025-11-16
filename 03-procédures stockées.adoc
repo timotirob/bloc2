@@ -1,0 +1,540 @@
+= Séquence Pédagogique : Les Déclencheurs (Triggers)
+:toc: left
+:icons: font
+:sectnums:
+:source-highlighter: pygments
+
+// Métadonnées du cours
+:author: Professeur (BTS SIO2)
+:revdate: {localdate}
+:description: Cours et exercices sur les déclencheurs (SQL Server et MySQL).
+:keywords: SQL Server, MySQL, Trigger, Déclencheur, LMD, LDD, SIO, Défense en Profondeur
+
+== Introduction et Contexte
+
+Nous avons déjà examiné les procédures stockées et les fonctions (UDF). Cette séquence aborde les **déclencheurs (triggers)**, un troisième type de routine SQL.
+
+Un déclencheur est un sous-programme (similaire à une procédure stockée) qui est **automatiquement exécuté** en réponse à un **événement** spécifique survenant dans la base de données[cite: 257].
+
+=== Le Concept de "Défense en Profondeur"
+
+Dans le contexte du BTS SIO, les déclencheurs sont souvent présentés comme une solution de **"défense en profondeur"** côté serveur.
+
+L'idée est de garantir l'intégrité et la traçabilité des données directement au niveau de la base, quel que soit l'applicatif qui s'y connecte, pour faire face aux menaces (compromission, injection, accès non autorisé).
+
+.Cas d'usage typique (Sécurité/Traçabilité)
+Un déclencheur peut intercepter un `DELETE` sur une table sensible et enregistrer qui a supprimé quoi et quand dans une table de logs (audit). Cela garantit la traçabilité même si l'application n'a pas prévu cette fonctionnalité.
+
+== Les Principaux Types de Déclencheurs
+
+On distingue trois grandes familles d'événements pouvant activer un déclencheur.
+
+* **Déclencheurs LMD (Langage de Manipulation de Données)** :
+Les plus courants. Ils réagissent aux événements `INSERT`, `UPDATE`, ou `DELETE` sur une table ou une vue spécifique.
+
+* **Déclencheurs LDD (Langage de Définition de Données)** :
+Ils réagissent aux événements qui modifient la structure de la base ou du serveur, tels que `CREATE_TABLE`, `ALTER_INDEX`, `DROP_VIEW` [cite: 272-275]. Très utiles pour les pistes d'audit.
+
+* **Déclencheurs de Connexion (Logon)** :
+Un type spécifique qui se déclenche lorsqu'un utilisateur ouvre une session sur le serveur (`LOGON`).
+
+NOTE: Il n'existe pas de déclencheur natif sur l'événement `SELECT`. Pour auditer les lectures, il faut utiliser les fonctionnalités d'Audit SQL Server.
+
+== Partie 1 : Déclencheurs sur SQL Server (Transact-SQL)
+
+Nous commençons par l'implémentation sur Microsoft SQL Server.
+
+=== Syntaxe Générale (T-SQL)
+
+La syntaxe de base pour un déclencheur LMD est la suivante:
+
+[source,sql]
+----
+CREATE [ OR ALTER ] TRIGGER [ nom_schema . ] nom_trigger
+ON { nom_table | nom_vue }
+[ WITH <options> ]
+{ FOR | AFTER | INSTEAD OF }
+{ [ INSERT ] [ , ] [ UPDATE ] [ , ] [ DELETE ] }
+AS
+BEGIN
+    -- Logique du déclencheur
+    -- (Instructions Transact-SQL)
+END;
+----
+
+* `AFTER` (ou `FOR`) : Le déclencheur s'exécute *après* l'action LMD. C'est le comportement le plus courant pour l'audit ou la validation.
+* `INSTEAD OF` : Le déclencheur s'exécute *à la place* de l'action LMD. Très utilisé pour permettre les mises à jour sur des vues basées sur plusieurs tables.
+
+=== Les Pseudo-Tables : `inserted` et `deleted`
+
+Pendant l'exécution d'un déclencheur LMD T-SQL, le SGBD expose deux tables temporaires spéciales, en lecture seule:
+
+* `inserted` : Contient les **nouvelles lignes**
+* `INSERT` : contient les lignes qui viennent d'être ajoutées.
+* `UPDATE` : contient les lignes *après* la modification (les nouvelles valeurs).
+
+* `deleted` : Contient les **anciennes lignes**
+* `DELETE` : contient les lignes qui viennent d'être supprimées.
+* `UPDATE` : contient les lignes *avant* la modification (les anciennes valeurs).
+
+Ces tables sont essentielles pour savoir *quelles données* ont été affectées par l'événement.
+
+=== Cas d'Usage LMD (AFTER)
+
+.Exemple 1 : Audit simple (trg_AfterInsert_Employee)
+[CAHIER-EXEMPLE: `DOC1-EXPL1`]
+L'objectif est de remplir une table `EmployeeAudit` à chaque fois qu'un nouvel employé est ajouté.
+
+[source,sql]
+----
+CREATE OR ALTER TRIGGER trg_AfterInsert_Employee
+ON Employee
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO EmployeeAudit (EmployeeID, Operation, OperationDate)
+    SELECT EmployeeID, 'INSERT', GETDATE()
+    FROM INSERTED;
+END;
+----
+
+.Exemple 2 : Validation complexe (Limite de compétences)
+[CAHIER-EXEMPLE: `DOC2-025`]
+L'objectif est d'empêcher l'ajout de plus de 4 langages pour un élève.
+
+[source,sql]
+----
+CREATE OR ALTER TRIGGER PROCS.E_CMP_I_LANGUEINF
+ON PROCS.COMPETENCES_LANGAGE_INFO AFTER INSERT AS
+BEGIN
+    DECLARE @NBLANG INT ;
+    SELECT @NBLANG = NB_LANGAGE_INFO FROM PROCS.FORMATIONELEVES
+    WHERE ID_ELEVE=(SELECT ID_ELEVE FROM INSERTED) ;
+
+    IF @NBLANG < 4
+        UPDATE PROCS.FORMATIONELEVES
+            SET NB_LANGAGE_INFO = NB_LANGAGE_INFO + 1
+            WHERE ID_ELEVE=(SELECT ID_ELEVE FROM INSERTED) ;
+    ELSE
+        BEGIN
+        ROLLBACK TRANSACTION ;
+        THROW 50002, 'L élève a déjà la maitrise de 4 langages info',1;
+        END;
+END;
+----
+
+.Exemple 3 : Formatage de données (Mer et Soleil)
+[CAHIER-EXEMPLE: `DOC3-EXPL1`]
+L'objectif est de s'assurer que le `NomCli` est toujours en majuscules.
+
+[source,sql]
+----
+CREATE TRIGGER NomEnMaj
+ON MERSOLEIL.Client
+FOR INSERT, UPDATE
+AS
+UPDATE MERSOLEIL.Client
+SET NomCli = UPPER(inserted.NomCli)
+FROM Client INNER JOIN inserted
+    ON Client.NumCli = inserted.NumCli
+----
+
+=== Cas d'Usage LMD Avancé (INSTEAD OF)
+
+Les triggers `INSTEAD OF` sont souvent utilisés sur des vues pour "traduire" une opération (comme un `INSERT`) en plusieurs opérations sur les tables de base sous-jacentes.
+
+.Exemple : Insertion via une vue (Brouard, `DOC2-15`)
+On crée une vue `V_instructeur_ins` qui joint `T_pilote_pil` et `T_instructeur_ins`. Un `INSERT` direct sur cette vue échouerait. Le trigger `INSTEAD OF` intercepte l'ordre et le dispatche correctement dans les two tables mères.
+
+[source,sql]
+----
+CREATE VIEW V_instructeur_ins
+AS
+SELECT p.pil_brevet,p.pil_nom,p.pil_nbHVol,p.pil_comp,p.pil_nbqualif,
+       i.ins_matricule, i.ins_expire
+FROM   T_pilote_pil p
+       INNER JOIN T_instructeur_ins i
+             ON p.pil_brevet = i.pil_brevet;
+GO
+
+CREATE TRIGGER E_ins_I_instructeur
+ON V_instructeur_ins INSTEAD OF INSERT AS
+BEGIN
+-- 1. Insérer la partie "pilote" dans la table T_pilote_pil
+INSERT INTO T_pilote_pil
+       (pil_brevet,pil_nom,pil_nbHVol,pil_comp,pil_nbqualif)
+ SELECT pil_brevet,pil_nom,pil_nbHVol,pil_comp,pil_nbqualif
+ FROM   INSERTED;
+
+-- 2. Insérer la partie "instructeur" dans la table T_instructeur_ins
+INSERT INTO T_instructeur_ins
+       (pil_brevet,ins_matricule,ins_expire)
+ SELECT pil_brevet,ins_matricule,ins_expire
+ FROM   INSERTED;
+END;
+GO
+----
+
+=== Partie 2 : Déclencheurs LDD (SQL Server)
+
+Ces déclencheurs surveillent les modifications de la *structure* de la base.
+
+.Exemple : Audit des modifications de structure (Brouard, `DOC2-15`)
+Ce trigger se déclenche `ON DATABASE` pour les événements `DROP_TABLE`, `DROP_INDEX`, `ALTER_TABLE`. Il loggue l'événement dans une table `evenements` et peut annuler l'action (ici, le week-end).
+
+[source,sql]
+----
+CREATE TABLE evenements (
+    moment     DATETIME2 NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    type       VARCHAR(64),
+    evenement     VARCHAR(MAX),
+    evenementXML  XML,
+    base         VARCHAR(255),
+    objet       VARCHAR(255),
+    programme  VARCHAR(255),
+    login    VARCHAR(255)
+);
+GO
+
+CREATE TRIGGER E_DDL_surveille
+   ON DATABASE
+   AFTER DROP_TABLE, DROP_INDEX, ALTER_TABLE
+AS
+BEGIN
+ SET NOCOUNT ON;
+ DECLARE @eventdata XML = EVENTDATA();
+
+ -- Logguer l'événement
+ INSERT INTO evenements
+    (type,evenement,evenementXML,base,objet,programme,login)
+  SELECT
+     @EventData.value('(/EVENT_INSTANCE/EventType)[1]','VARCHAR(100)'),
+     @EventData.value('(/EVENT_INSTANCE/TSQLCommand)[1]','VARCHAR(MAX)'),
+     @EventData,
+     DB_NAME(),
+     @EventData.value('(/EVENT_INSTANCE/ObjectName)[1]','VARCHAR(255)'),
+     PROGRAM_NAME(),
+     SUSER_SNAME();
+
+ -- Règle métier : interdire les modifications le week-end
+ IF (DATEPART(weekday,GETDATE())) IN (6,7) -- Samedi ou Dimanche
+  BEGIN
+   -- Note: Le COMMIT est étrange ici, mais l'idée est d'annuler.
+   COMMIT TRANSACTION;
+   THROW 50004,'Pas de bidouille le week end...',1;
+ END;
+END;
+GO
+----
+
+=== Partie 3 : Déclencheurs de Connexion (SQL Server)
+
+Ces triggers s'exécutent sur l'événement `LOGON` et sont définis au niveau du **serveur**.
+
+.Exemple : Limiter les heures de connexion (Brouard, `DOC2-15`)
+Ce trigger `ON ALL SERVER` empêche un utilisateur spécifique (`util_heure_ouv`) de se connecter en dehors des heures ouvrées (9h-16h).
+
+[source,sql]
+----
+CREATE TRIGGER connection_heures_ouv
+ON ALL SERVER AFTER LOGON
+AS
+BEGIN
+IF ORIGINAL_LOGIN() = 'util_heure_ouv' AND
+    (DATEPART(HOUR, GETDATE()) < 9 OR DATEPART (HOUR, GETDATE()) > 16)
+       -- Lever une erreur annule la tentative de connexion
+       THROW 50005,'Pas de connexion en dehors des heures de boulot...',1;
+END;
+GO
+----
+
+=== Partie 4 : TP SQL Server
+
+.TP 1 : Étude de Cas "Mer et Soleil"
+(Basé sur `DOC3-035` et `DOC3-TP`)
+
+* **Contexte**: Gestion de locations. Le `CA` est un champ dénormalisé dans `CLIENT` qui doit être maintenu. `HISTOLOC` archive les suppressions.
+* **Exercice 1**:
+1.  *Initialisation*: Mettre à jour le champ `CA` de `CLIENT` pour qu'il reflète la somme des `PrixLoc`.
+2.  *Formatage*: Modifier le trigger `NomEnMaj` pour `NomCli` en `UPPER` et `PrenomCli` avec `Initiale en Majuscule`.
+3.  *Historisation*: Tester le trigger `HistoLocation` (vu en cours) lors d'un `DELETE` sur `Location`.
+4.  *MAJ du CA*: Créer un **nouveau déclencheur** sur `LOCATION` (pour `INSERT`, `UPDATE`, `DELETE`) qui met à jour le `CA` du client correspondant dans la table `CLIENT`.
+
+.TP 2 : "Formation des Élèves"
+(Basé sur `DOC2-025` et `SEANCE6-DOC2-TP`)
+
+* **Contexte**: Gérer les compétences et méthodes des élèves.
+* **Exercice 1**:
+1.  Tester le trigger `E_CMP_I_LANGUEINF` (vu en cours) jusqu'à ce qu'il bloque l'insertion.
+2.  Ajouter une table `COMPETENCE_METHODE` (AGILE, UML, GIT, DEVOPS...).
+3.  Créer un nouveau trigger sur `COMPETENCE_METHODE` empêchant l'insertion au-delà de 2 méthodes par élève.
+
+.TP 3 : "Compagnie Aérienne" (Brouard)
+(Basé sur `SEANCE7-DOC2-TP` et `DOC2-15`)
+
+* **Contexte**: Gestion des pilotes et de leurs qualifications. [cite_start]La table `T_pilote_pil` contient un champ dénormalisé `pil_nbqualif` qui compte les qualifications de `T_qualifs_qua` .
+* **Exercice 1 : Déclencheur `AFTER DELETE`**
+* *Objectif*: Quand on supprime une qualification (`DELETE` sur `T_qualifs_qua`), décrémenter le compteur `pil_nbqualif` du pilote concerné dans `T_pilote_pil`.
+* *Solution (Brouard, `DOC2-15`)*:
+[source,sql]
+----
+CREATE TRIGGER E_qua_D_qualifs
+ON T_qualifs_qua
+AFTER DELETE
+AS
+BEGIN
+ UPDATE  T_pilote_pil
+   SET   pil_nbqualif = pil_nbqualif - 1
+   WHERE pil_brevet   IN
+   (SELECT pil_brevet FROM DELETED); -- Utilise DELETED
+END;
+GO
+----
+
+* **Exercice 2 : Déclencheur `AFTER INSERT`**
+* *Objectif*: Quand on ajoute une qualification (`INSERT` sur `T_qualifs_qua`), incrémenter `pil_nbqualif`.
+* *Règle métier*: Un pilote ne peut pas avoir plus de 3 qualifications. Si la limite est atteinte, annuler la transaction (`ROLLBACK`).
+* *Solution (Brouard, `DOC2-15`)*:
+[source,sql]
+----
+CREATE TRIGGER E_qua_I_qualifs
+ON T_qualifs_qua AFTER INSERT AS
+BEGIN
+ DECLARE @nb_qualifs TINYINT;
+
+ -- Suppose un seul insert. Pour plusieurs, il faut un curseur (cf script 7-50)
+ SELECT @nb_qualifs = pil_nbqualif FROM T_pilote_pil
+   WHERE pil_brevet = (SELECT pil_brevet FROM INSERTED);
+
+ IF @nb_qualifs < 3
+     UPDATE T_pilote_pil
+     SET   pil_nbqualif = pil_nbqualif + 1
+     WHERE pil_brevet=(SELECT pil_brevet FROM INSERTED);
+ ELSE
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50002,'Le pilote a déjà 3 qualifications',1;
+  END;
+END;
+----
+
+* **Exercice 3 : Déclencheur `AFTER UPDATE`**
+* *Objectif*: Gérer la mise à jour du `pil_brevet` (changement de pilote pour une qualification).
+* *Règles métier*:
+1.  Annuler si on change le `typ_typa` (modification interdite).
+2.  Annuler si le *nouveau* pilote dépasse 3 qualifications.
+* *Solution (Brouard, `DOC2-15`)*:
+[source,sql]
+----
+CREATE TRIGGER E_qua_U_qualifs
+ON T_qualifs_qua
+AFTER UPDATE
+AS
+BEGIN
+-- Règle 1: Interdire la MAJ du type d'avion
+IF UPDATE(typ_typa) -- Fonction T-SQL spécifique
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50003,'Mise à jour qualification interdite',1;
+  END;
+
+-- Règle 2: Gérer le changement de pilote
+IF UPDATE(pil_brevet)
+ BEGIN
+ DECLARE @nb_qualifs TINYINT;
+ SELECT @nb_qualifs = pil_nbqualif FROM T_pilote_pil
+   WHERE pil_brevet = (SELECT pil_brevet FROM INSERTED); -- Nouveau pilote
+
+ IF @nb_qualifs < 3
+   BEGIN
+    -- Incrémenter le nouveau pilote
+    UPDATE T_pilote_pil
+     SET   pil_nbqualif = pil_nbqualif + 1
+     WHERE pil_brevet=(SELECT pil_brevet FROM INSERTED);
+    -- Décrémenter l'ancien pilote
+   UPDATE  T_pilote_pil
+    SET   pil_nbqualif = pil_nbqualif - 1
+    WHERE pil_brevet IN (SELECT pil_brevet FROM DELETED);
+   END;
+ ELSE
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50002,'Le pilote a déjà 3 qualifications',1;
+  END;
+ END;
+END;
+----
+
+* **Scripts de Données (SQL Server)**
+* `DOC2-15 - Déclencheurs livre Brouard SQL Server.sql` (Contient la création des tables et les triggers)
+* `DOC2-05_Brouard Sous requêtes_Etudiant.sql` (Jeu de données alternatif Air France)
+* `DOC2-10_Reinitialise Cours Brouard Etudiants.sql` (Script de nettoyage)
+* `DOC3-035-Données Mer et Soleil.sql` (Jeu de données Mer et Soleil)
+
+== Partie 5 : Déclencheurs sur MySQL
+
+L'implémentation des déclencheurs varie entre les SGBD. L'étude de cas "Easy2Drive" utilise MySQL, dont la syntaxe diffère de SQL Server.
+
+=== Différences Clés : SQL Server vs MySQL
+
+Les différences avec Transact-SQL (SQL Server) sont substantielles:
+
+* **Pseudo-Tables** :
+* *SQL Server* utilise `inserted` et `deleted` (qui sont des *tables* pouvant contenir plusieurs lignes).
+* *MySQL* utilise les alias `NEW` et `OLD` (qui représentent la *ligne* en cours de traitement, car les triggers MySQL s'exécutent `FOR EACH ROW`). `NEW` est la nouvelle valeur, `OLD` est l'ancienne.
+
+* **Syntaxe** :
+* *MySQL* nécessite de changer le `DELIMITER` (souvent `$$`) pour définir un corps de trigger contenant des `;`.
+* *MySQL* utilise `IF ... THEN ... END IF;` pour les blocs conditionnels.
+* *MySQL* utilise `SIGNAL SQLSTATE '...'` pour lever des erreurs.
+* Les variables T-SQL sont préfixées par `@`, pas nécessairement en MySQL (où `@` est pour les variables de session).
+
+=== Syntaxe Générale (MySQL)
+
+La syntaxe de création est la suivante:
+
+[source,mysql]
+----
+CREATE
+    [DEFINER = user]
+    TRIGGER [IF NOT EXISTS] trigger_name
+    { BEFORE | AFTER } { INSERT | UPDATE | DELETE }
+    ON tbl_name FOR EACH ROW
+    [ FOLLOWS | PRECEDES ] other_trigger_name
+    trigger_body
+----
+
+* [cite_start]`trigger_time` : `BEFORE` ou `AFTER`[cite: 21].
+* `trigger_event` : `INSERT`, `UPDATE`, ou `DELETE`[cite: 22].
+* `trigger_body` : Le code du trigger, souvent encapsulé dans `BEGIN ... END;`.
+
+== Partie 6 : Étude de Cas MySQL "Easy2Drive"
+
+(Basé sur `SEANCE8-Déclencheurs-Extrait EDC.docx` et les scripts MySQL)
+
+=== Contexte et Mission
+
+L'audit de sécurité de la plateforme "Easy2Drive" a révélé des risques, notamment "l'attribution abusive de la Garantie Réussite".
+
+Un élève qui échoue à l'ETG (Examen du Code) peut se faire rembourser les frais de présentation s'il remplit certaines conditions. Le risque est qu'une auto-école fasse une fausse déclaration d'échec pour qu'un élève bénéficie abusivement de cette garantie.
+
+Un déclencheur `check_garantie_reussite` est déjà en place pour contrôler les conditions lors de l'enregistrement de l'échec.
+
+=== Schéma Relationnel (Extraits pertinents)
+
+[source,text]
+----
+Eleve (idUtilisateur, dateNaissance, ..., dateInscription, dateETG, echecETG, garantieReussite)
+  PK: idUtilisateur
+
+SerieTest (id, theme)
+  PK: id
+
+ExamenBlanc (id, nom)
+  PK: id
+
+Evaluer (idEleve, idSerieTest, dateHeure, evaluerScore)
+  PK: (idEleve, idSerieTest, dateHeure)
+  FK: idEleve -> Eleve(idUtilisateur)
+
+Passer (idEleve, idExamenBlanc, dateHeure, examenScore)
+  PK: (idEleve, idExamenBlanc, dateHeure)
+  FK: idEleve -> Eleve(idUtilisateur)
+----
+
+=== Conditions d'attribution de la "Garantie Réussite"
+
+L'élève doit:
+1.  Avoir passé au moins 25 séries de quiz.
+2.  Avoir passé au moins 4 examens blancs.
+3.  Avoir obtenu au moins 34/40 de moyenne sur les 4 meilleurs examens blancs.
+4.  L'échec doit dater de moins de 6 mois.
+5.  La garantie n'est accordée qu'une seule fois après le premier échec.
+
+=== Code du Déclencheur (Original)
+
+Voici le code MySQL du trigger existant (issu de `DOC B2` et `SEANCE8 -02 - Déclencheur EDC MySQL.sql`).
+
+[source,mysql]
+----
+DELIMITER $$
+CREATE TRIGGER IF NOT EXISTS check_garantie_reussite
+BEFORE UPDATE -- Se déclenche AVANT la MAJ
+ON Eleve -- Sur la table Eleve [cite: 121]
+FOR EACH ROW -- Pour chaque ligne modifiée
+BEGIN
+    DECLARE v_nbSerie INT;
+    DECLARE v_scoreMoyen DOUBLE;
+
+    -- Gérer condition 5 (deuxième échec)
+    -- OLD.echecEtg = 1 (ancien état) ET NEW.echecEtg = 1 (nouvel état)
+    IF OLD.echecEtg = 1 AND NEW.echecEtg = 1 THEN
+        SIGNAL SQLSTATE '10001'
+        SET MESSAGE_TEXT = 'Garantie réussite : deuxième échec';
+    END IF ;
+
+    -- Gérer condition 4 (échec trop ancien)
+    IF DATE_ADD(NEW.dateEtg, INTERVAL 6 MONTH) >= NOW() THEN
+        SIGNAL SQLSTATE '10002'
+        SET MESSAGE_TEXT = 'Garantie réussite : échec trop ancien';
+    END IF ;
+
+    -- Gérer condition 1 (nb séries)
+    -- Note: NEW.idUtilisateur (script SQL) vs NEW.id (Doc B2)
+    SELECT COUNT(*) INTO v_nbSerie FROM Evaluer WHERE idEleve = NEW.idUtilisateur;
+    IF v_nbSerie < 25 THEN
+        SIGNAL SQLSTATE '10003'
+        SET MESSAGE_TEXT = 'Garantie réussite : nombre de séries insuffisant';
+    END IF;
+
+    -- Gérer condition 3 (moyenne examens blancs)
+    SELECT AVG(examenScore) INTO v_scoreMoyen FROM (
+        SELECT examenScore FROM Passer
+        WHERE idEleve = NEW.idUtilisateur
+        ORDER BY examenScore DESC LIMIT 4
+    ) AS MeilleureNotes;
+    IF v_scoreMoyen < 34 THEN
+        SIGNAL SQLSTATE '10005'
+        SET MESSAGE_TEXT = 'Garantie réussite : score examens blancs insuffisant'; [cite: 141-144]
+    END IF;
+
+-- Garantie Réussite attribuée (implicitement si aucune erreur n'est levée)
+END$$
+DELIMITER ;
+----
+
+=== Travail à Faire (Extrait EDC)
+
+* **Question B.1.2**:
+a) Analyser le corps du déclencheur et repérer les conditions qui ne sont pas ou mal implémentées.
+b) Écrire le code source corrigé du déclencheur (uniquement les parties à modifier ou à ajouter).
+
+* **Exercice Pratique**:
+Écrivez des instructions `UPDATE` pour déclencher successivement chacun des messages d'erreur (SQLSTATE 10001, 10002, etc.) . Si besoin, ajoutez les données nécessaires pour provoquer ces déclenchements.
+
+* **Scripts de Données (MySQL)**
+* `SEANCE8 -01- Table Eleve Easy2Driver MySQL.sql` (Jeu de données Easy2Drive)
+* `SEANCE8-005-Script TP Cinéma - Version Evaluation.sql` (Jeu de données complémentaire "Cinéma")
+
+== Partie 7 : Discussion - La "Défense en Profondeur" et ses Alternatives
+
+Votre remarque initiale est très pertinente : les déclencheurs sont un outil puissant, mais parfois complexe à gérer.
+
+=== Avantages (La "Défense en Profondeur")
+
+* **Cohérence Garantie** : L'action est exécutée *quelle que soit* l'application. La règle de gestion est dans la BDD.
+* **Atomicité** : Le trigger s'exécute dans la *même transaction* que l'instruction LMD. Si le trigger échoue (ex: `SIGNAL` ou `THROW`), l'instruction LMD est annulée (`ROLLBACK`).
+* **Audit Fiable** : Idéal pour l'audit, car l'utilisateur ne peut pas "oublier" d'exécuter la logique de traçabilité.
+
+=== Inconvénients (Pièges et "Logique Cachée")
+
+* **Performance** : Un trigger s'exécute à *chaque* événement (ou *chaque ligne* sur MySQL). Un trigger complexe sur une table très sollicitée peut devenir un goulot d'étranglement.
+* **Complexité ("Logique Cachée")** : Le principal reproche. Un développeur qui exécute un simple `INSERT` peut ne pas savoir qu'il déclenche 3 triggers en cascade.
+* **Maintenance** : Le débogage est difficile.
+* **Portabilité** : Comme nous venons de le voir, la syntaxe et le comportement (par ligne vs par instruction) sont très différents entre SQL Server et MySQL.
+
+=== Alternatives Modernes
+
+1.  **Contraintes (Constraints)** : `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY`, `CHECK`.
+2.  **Logique Applicative (Code-behind / Service Layer)** : La validation est gérée dans le code de l'application (C#, Java, Python...).
+3.  **Procédures Stockées (Stored Procedures)** : Au lieu de faire des `INSERT` directs, l'application appelle une procédure `sp_CreateClient` qui contient la validation, le formatage et l'insertion.
