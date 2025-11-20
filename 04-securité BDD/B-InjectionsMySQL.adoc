@@ -1,0 +1,156 @@
+= TP : Les Injections SQL (SQLi)
+:toc: left
+:icons: font
+:source-highlighter: rouge
+:experimental:
+
+== Introduction
+Les injections SQL (SQLi) sont une faille de sécurité web permettant à un attaquant d'interférer avec les requêtes qu'une application fait à sa base de données. Cela permet souvent de contourner l'authentification ou d'accéder à des données non autorisées.
+
+WARNING: Ce TP doit être réalisé dans un environnement de développement local (WAMP, XAMPP, Laragon). N'exécutez jamais d'attaques sur des serveurs de production.
+
+== Partie 1 : Mise en place de l'environnement
+
+=== 1. Base de données
+Exécutez le script SQL ci-dessous dans votre gestionnaire de base de données (PhpMyAdmin, HeidiSQL...) pour créer la table cible.
+
+[NOTE]
+====
+Assurez-vous que la base de données cible s'appelle `phppdb` (comme dans le script PHP fourni plus bas) ou adaptez le script PHP.
+====
+
+[source,sql]
+----
+CREATE DATABASE IF NOT EXISTS phppdb;
+USE phppdb;
+
+CREATE TABLE IF NOT EXISTS `utilisateurs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `login` varchar(40) DEFAULT NULL,
+  `password` varchar(400) DEFAULT NULL,
+  `role` varchar(40) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+-- Insertion d'un admin (mot de passe haché ou complexe simulé)
+INSERT INTO `utilisateurs` (`id`, `login`, `password`, `role`) VALUES
+	(1, 'timotirob', '$2b$08$sDQ9vvaGANe4WLeCd3GiiusV65Cs4h/O6r6ikrwh3eyANBeZrSmOi', 'admin'),
+	(2, 'robsio', '$2b$08$sDQ9vvaGANe4WLeCd3GiiusV65Cs4h/O6r6ikrwh3eyANBeZrSmOi', 'admin'),
+	(3, 'invite', 'invite', 'invite');
+----
+
+=== 2. Fichiers de l'application
+Créez les deux fichiers suivants dans le répertoire `www` ou `htdocs` de votre serveur web local.
+
+.Fichier : `login.html` (Formulaire de connexion)
+[source,html]
+----
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>Exemple d'un formulaire de login</title>
+</head>
+<body>
+<form action="./injection.php" method="post">
+    <div>
+        Entrez votre identifiant :
+        <input type="text" name="identifiant" value="" size="20" maxlength="20" />
+        <BR>
+       Entrez votre mot de passe :
+        <input type="password" name="motDePasse" value="" size="20" maxlength="32" />
+
+        <input type="submit" name="soumettre" value="OK" />
+    </div>
+</form>
+</body>
+</html>
+----
+
+.Fichier : `injection.php` (Script de traitement vulnérable)
+[source,php]
+----
+<?php
+$dsn = "mysql:host=localhost;dbname=phppdb;charset=utf8";
+$utilisateur = "root";
+$motdepasse = ""; // Mettre votre mot de passe root si nécessaire
+
+try {
+    $pdo = new PDO($dsn, $utilisateur, $motdepasse);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Erreur de connexion à la base de données : " . $e->getMessage());
+}
+
+// Récupération des données du formulaire
+$username = $_POST['identifiant'];
+$password = $_POST['motDePasse'];
+
+// --- ZONE VULNÉRABLE ---
+// Requête SQL construite par concaténation directe
+$query = "SELECT * FROM utilisateurs WHERE login = '$username' AND password = '$password'";
+// -----------------------
+
+// Exécution de la requête
+$result = $pdo->query($query);
+
+// Vérification de l'authentification
+if ($result->rowCount() > 0) {
+    echo "Bienvenue, $username!";
+} else {
+    echo "Échec de l'authentification.";
+}
+?>
+----
+
+== Partie 2 : Exploitation de la faille (Hacking)
+
+=== 1. Analyse du code
+Ouvrez le fichier `injection.php`. Repérez la ligne où la variable `$query` est définie.
+Expliquez pourquoi cette méthode de construction de requête est dangereuse, notamment comment les guillemets simples `'` peuvent être utilisés pour manipuler la chaîne SQL.
+
+=== 2. Attaque
+Ouvrez `login.html` dans votre navigateur.
+Votre objectif est de vous connecter en tant qu'administrateur sans connaître le mot de passe de l'utilisateur `root` ou `timotirob`.
+
+Essayez d'injecter du code SQL dans le champ **Mot de passe** (ou identifiant) pour modifier la logique de la requête.
+
+*Indices :*
+
+* En SQL, `--` ou `#` signifie le début d'un commentaire (le reste de la ligne est ignoré).
+* L'opérateur `OR` permet de valider une condition si l'un des deux termes est vrai.
+* Une tautologie est une expression toujours vraie (ex: `1=1`).
+
+*Essayez de saisir ceci dans le champ mot de passe :*
+`' OR 1=1 --`
+
+Que se passe-t-il ? Expliquez précisément quelle requête SQL a été exécutée par le serveur.
+
+== Partie 3 : Sécurisation (Patch)
+
+=== 1. Création du fichier protégé
+Dupliquez le fichier `injection.php` et renommez-le `injection_protection.php`.
+Modifiez également `login.html` (ou créez `login_protection.html`) pour que le formulaire pointe vers ce nouveau fichier PHP (`action="./injection_protection.php"`).
+
+=== 2. Utilisation de requêtes préparées
+Modifiez le code PHP pour éradiquer la faille. Vous devez remplacer la concaténation de variables par l'utilisation de **requêtes préparées** avec PDO.
+
+**Les étapes à suivre :**
+
+1. Remplacez les variables `$username` et `$password` dans la chaîne SQL par des marqueurs nommés (ex: `:username`, `:password`).
+2. Utilisez la méthode `$pdo->prepare()` au lieu de `$pdo->query()`.
+3. Liez les variables aux marqueurs avec `$stmt->bindParam()`.
+4. Exécutez la requête avec `$stmt->execute()`.
+
+[source,php]
+----
+// Structure attendue pour la correction :
+$query = "SELECT * FROM utilisateurs WHERE login = :tag1 AND password = :tag2";
+$stmt = $pdo->prepare($query);
+// À compléter : bindParam et execute
+----
+
+=== 3. Vérification
+Testez votre nouvelle page protégée avec la même attaque que dans la Partie 2.
+L'injection ne doit plus fonctionner (vous devez obtenir "Échec de l'authentification").

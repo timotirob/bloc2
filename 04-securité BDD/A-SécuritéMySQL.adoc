@@ -1,0 +1,348 @@
+= TP : Sécurité des données sur MySQL
+:toc: left
+:icons: font
+:source-highlighter: rouge
+
+== Introduction
+La sécurité sous MySQL diffère de celle de SQL Server. La notion de Connexion et d'utilisateur est souvent confondue.
+
+== Partie 0 : Mise en place de la base de données
+Exécutez le script suivant pour créer la base de données et les tables nécessaires (Acteurs, Films, Casting).
+
+[source,sql]
+----
+-- Création des tables Acteur, Film, Casting, Realisateur, Pays
+CREATE TABLE acteur
+(
+   id_acteur INT NOT NULL PRIMARY KEY,
+   fk_id_pays INT NOT NULL,
+   NOM varchar(40),
+   PRENOM VARCHAR(40),
+   genre CHAR(1),
+   dateDeNaissance date
+  )
+;
+
+
+INSERT INTO acteur (id_acteur, fk_id_pays,NOM,PRENOM,genre,dateDeNaissance) VALUES
+(27,5, 'Brando','Marlon','H','1924-04-03'),
+(51,5, 'Pacino','Al','H','1940-04-25'),
+(53,5, 'Caan','James','H','1940-03-26'),
+(56,5, 'Duvall','Robert','H','1931-01-05'),
+(59,5, 'Keaton','Diane','F','1946-01-05'),
+(60,5, 'De Niro','Robert','H','1943-08-17'),
+(65,5, 'Shire','Talia','F','1946-04-25'),
+(72,5, 'Garcia','Andy','H','1956-04-12'),
+(75,5, 'Coppola','Sofia','F','1971-05-14'),
+(80,5, 'Kilmer','Val','H','1959-12-31'),
+(100,5, 'Eastwood','Clint','H','1930-05-31'),
+(101,5, 'Hackman','Gene','H','1930-01-30'),
+(102,5, 'Freeman','Morgan','H','1937-06-01'),
+(103,5, 'Harris','Richard','H','1930-10-01'),
+(105,5, 'Robert','Timothée','H','1971-06-15'),
+(110,5, 'Steinfeld','Hailee','H','1996-12-11'),
+(120,5, 'Bridges','Jeff','H','1949-12-4'),
+(130,5, 'Damon','Matt','H','1970-10-8'),
+(132,5, 'Sheen', 'Martin', 'H', '1940-08-03'),
+(135,5, 'Nicholson', 'Jack', 'H', '1937-04-22'),
+(140,6, 'Ledger', 'Heath', 'H', '1979-04-04'),
+(141,46, 'Terry', 'Nigel', 'H', '1945-08-15'),
+(142,46, 'Mirren', 'Helen', 'F', '1945-07-26'),
+(143,46, 'Williamson', 'Nicol', 'H', '1946-09-14'),
+(145,5, 'Phenix', 'Joaquin', 'H', '1974-10-28')
+;
+
+
+CREATE TABLE film
+(
+   id_film INT NOT NULL PRIMARY KEY,
+   titre VARCHAR(120),
+   annee int,
+   duree int
+  )
+;
+
+
+INSERT INTO film (id_film,titre,annee,duree) VALUES
+(12, 'Le Parrain I',1972, 175),
+(13, 'Le Parrain II',1974, 202),
+(14, 'Le Parrain III',1990, 162),
+(20, 'Heat',1995, 171),
+(25, 'Impitoyable',1992, 131),
+(26, 'True Grit',2010, 110),
+(30, 'Apocalypse Now',1979, 183),
+(35, 'Batman', 1989, 126),
+(40, 'The Dark Knight', 2008,152),
+(45, 'James Bond - Casino Royale', 2006, 144),
+(47, 'James Bond - Skyfall', 2012, 143) ,
+(49, 'James Bond - 007 Spectre', 2015, 148) ,
+(50, 'Excalibur', 1981, 140) ,
+(51, 'Indigenes' , 2006,128) ,
+(55, 'Napoléon', 2023, 150)
+;
+
+CREATE TABLE casting
+(
+   id_casting INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+   fk_id_film INT NOT NULL,
+   fk_id_acteur INT NOT NULL,
+   fk_id_pays INT NOT NULL,
+   role VARCHAR(100)
+   );
+   INSERT INTO casting (fk_id_film, fk_id_acteur,fk_id_pays,role) VALUES
+(12, 27, 5, 'Don Vito Corleone'),
+(12, 51, 5,'Michael Corleone'),
+(12, 53, 5,'Santino "Sonny" Corleone'),
+(12, 56, 5,'Tom Hagen'),
+(12, 59, 5,'Kay Adams'),
+(13, 60, 5,'Vito Corleone'),
+(13, 51, 5,'Michael Corleone'),
+(13, 59, 5,'Kay Adams'),
+(13, 65, 5,'Connie Corleone'),
+(13, 56, 5,'Tom Hagen'),
+(14, 65, 5,'Connie Corleone') ,
+(14, 72, 5,'Vincent Mancini-Corleone') ,
+(14, 75, 5,'Mary Corleone') ,
+(14, 51, 5,'Don Michael Corleone'),
+(14, 59, 5,'Kay Adams'),
+(20, 60, 5,'Neil Mac Cauley'),
+(20, 51, 5,'Lieutenant Vincent Hanna'),
+(20, 80, 5,'Chris Shiherlis'),
+(25, 100, 5,'William Munny'),
+(25, 101, 5,'Little Bill Daggett'),
+(25, 102, 5,'Ned Logan'),
+(25, 103, 5,'English Bob'),
+(26, 110, 5,'Mattie Ross'),
+(26, 120, 5,'Marshal Reuben J. "Rooster" Cogburn'),
+(26, 130, 5,'LaBoeuf, Texas Ranger'),
+(30, 27, 5,'Le colonel Walter E. Kurtz'),
+(30,56, 5,'le lieutenant-colonel Bill Kilgore'),
+(30, 132 , 5,'le capitaine Benjamin L. Willard'),
+(35, 135, 5,'Joker'),
+(40, 140, 5,'Joker'),
+(50, 141, 46, 'Le Roi Arthur Pendragon'),
+(50, 142, 46, 'La fée Morgane'),
+(50, 143, 46, 'Merlin l''enchanteur'),
+(55, 145, 45, 'Napoléon Bonaparte')
+;
+
+
+
+CREATE TABLE realisateur
+(
+   id_realisateur INT NOT NULL PRIMARY KEY,
+   fk_id_pays INT NOT NULL,
+   NOM varchar(40),
+   PRENOM VARCHAR(40)
+  )
+;
+
+
+INSERT INTO realisateur (id_realisateur,fk_id_pays,NOM,PRENOM) VALUES
+(10, 5, 'Eastwood','Clint'),
+(12, 5,'Coppola','Francis Ford'),
+(15, 5,'Mann','Michael'),
+(20, 5,'Coen','Joel'),
+(21, 5,'Coen','Ethan'),
+(50, 45,'Robert','Timothée'),
+(60, 5,'Burton', 'Tim') ,
+(61, 5,'Nolan', 'Christopher'),
+(70, 46,'Boorman', 'John'),
+(75, 46,'Scott', 'Ridley')
+;
+
+CREATE TABLE realisateurfilm
+(
+	id_realfilm INT NOT NULL PRIMARY KEY AUTO_increment,
+	fk_id_film INT NOT NULL ,
+   fk_id_realisateur INT NOT NULL
+  )
+;
+INSERT INTO realisateurfilm (fk_id_film,fk_id_realisateur) VALUES
+(12,12 ),
+(13,12 ),
+(14,12 ),
+(20,15 ),
+(25,10 ),
+(26,20 ),
+(26,21 ),
+(30,12) ,
+(35,60),
+(40,61),
+(50,70)
+;
+
+
+
+CREATE TABLE pays
+(
+   id_pays INT NOT NULL,
+   nom VARCHAR(40)
+  )
+;
+INSERT INTO PAYS (id_pays, nom) VALUES (5,'USA') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (6,'Australie') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (8,'Autriche') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (12,'Italie') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (15,'République Tchèque') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (18,'Chine') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (20,'Turquie') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (23,'Ecosse') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (40,'Maroc') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (42,'Mexique') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (45,'France') ;
+INSERT INTO PAYS (id_pays, nom) VALUES (46,'Angleterre') ;
+
+CREATE TABLE tournage
+(
+	id_tournage INT NOT NULL PRIMARY KEY AUTO_increment,
+	fk_id_film INT NOT NULL ,
+   fk_id_pays INT NOT NULL ,
+   region VARCHAR(200)
+  )
+;
+INSERT INTO tournage (fk_id_film, fk_id_pays, region) VALUES (51, 45, 'Grand Est') ;
+
+-- Table pour exercice 2 sur la sécurité MySQL
+CREATE TABLE logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY, -- Identifiant unique pour chaque log
+    event_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- Timestamp de l'événement
+    nom_utilisateur VARCHAR(50) NOT NULL, -- Nom de l'utilisateur ayant déclenché l'événement
+    action VARCHAR(100) NOT NULL, -- Action effectuée (ex: INSERT, DELETE, etc.)
+    details TEXT -- Détails supplémentaires sur l'événement
+);
+
+-- Table pour exercice 3 sur la sécurité MySQL
+-- déclencheurs sur table acteur
+
+CREATE TABLE audit_acteur_logs (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    event_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    nom_utilisateur VARCHAR(50),
+    action VARCHAR(100),
+    anciennes_valeurs TEXT,
+    nouvelles_valeurs TEXT
+);
+
+----
+
+== Rappels de Syntaxe (Aide Mémoire)
+
+=== Création d'utilisateur
+[source,sql]
+----
+-- Syntaxe générale
+CREATE USER 'nom_utilisateur'@'hote' IDENTIFIED BY 'mot_de_passe';
+
+-- Exemple pour un utilisateur local
+CREATE USER 'jeffrey'@'localhost' IDENTIFIED BY 'password123!';
+
+-- Exemple pour un utilisateur sur le réseau (IP spécifique)
+CREATE USER 'analyst'@'192.168.1.31' IDENTIFIED BY 'password123!';
+
+-- Exemple pour un accès de partout (déconseillé en prod)
+CREATE USER 'invite'@'%' IDENTIFIED BY 'password';
+----
+
+=== Attribution de droits (GRANT)
+[source,sql]
+----
+-- Donner tous les droits sur une base (ex: db1)
+GRANT ALL ON db1.* TO 'jeffrey'@'localhost';
+
+-- Donner des droits spécifiques (Lecture, Insertion)
+GRANT SELECT, INSERT ON db1.nom_table TO 'jeffrey'@'localhost';
+----
+
+=== Gestion des Rôles
+[source,sql]
+----
+-- 1. Créer le rôle
+CREATE ROLE IF NOT EXISTS 'app_developer'@'localhost';
+
+-- 2. Donner des droits au rôle
+GRANT ALL ON app_db.* TO 'app_developer'@'localhost';
+
+-- 3. Assigner le rôle à un utilisateur
+GRANT 'app_developer'@'localhost' TO 'dev1'@'localhost';
+
+-- 4. Activation du rôle (nécessaire à la connexion)
+SET ROLE 'app_developer'@'localhost';
+----
+
+== Exercice 1 : Gestion des utilisateurs et principe de moindre privilège
+
+=== 1. Création des utilisateurs
+Créez 3 utilisateurs sur votre serveur MySQL :
+
+1. **Vous-même** : Doit pouvoir accéder au serveur depuis n'importe où (`%`).
+2. **Un utilisateur `test`** : Doit pouvoir accéder uniquement depuis `localhost`.
+3. **Un utilisateur `binome`** : Doit pouvoir accéder uniquement depuis une machine distante spécifique (simulez l'IP d'un voisin ou utilisez `%` si impossible).
+
+=== 2. Attribution des droits
+Appliquez strictement les droits suivants :
+
+* **Vous-même** : Tous les droits sur la base de données du TP.
+* **`binome`** : Droit de lecture (`SELECT`) **uniquement** sur les tables `acteur` et `casting`.
+* **`test`** : Droits de lecture (`SELECT`) et modification (`UPDATE`) sur **toutes** les tables.
+
+.Question
+[WARNING]
+====
+Fournissez les commandes SQL `CREATE USER` et `GRANT` exactes utilisées. Expliquez pourquoi l'usage de `GRANT ALL PRIVILEGES` est dangereux (principe de moindre privilège).
+====
+
+=== 3. Tests (Ligne de commande)
+Ouvrez un terminal (ne pas utiliser l'interface graphique pour ce test) :
+[source,bash]
+----
+mysql -u test -p
+----
+* Vérifiez que vous pouvez lire la table `acteur`.
+* Vérifiez que vous **ne pouvez pas** supprimer (`DROP`) une table.
+* Vérifiez que vous n'avez pas accès aux autres bases de données (ex: `mysql`, `sys`).
+
+== Exercice 2 : Rôles et Permissions
+
+=== Objectif
+Utiliser les rôles pour gérer les permissions de groupe.
+
+=== Travail à faire
+1. Créer un rôle nommé `dataAnalyst`.
+2. Donner à ce rôle les privilèges suivants :
+* **SELECT** sur toutes les tables.
+* **INSERT** uniquement sur la table `logs`.
+3. Créer deux utilisateurs `analyst1` (local) et `analyst2` (réseau) et leur attribuer ce rôle.
+
+=== Manipulation des droits (Revoke)
+1. Connectez-vous avec `analyst1`, activez le rôle, et testez l'insertion dans `logs`.
+2. En tant qu'administrateur, retirez le droit d'insertion au rôle :
++
+[source,sql]
+----
+REVOKE INSERT ON base.logs FROM 'dataAnalyst'@'...';
+----
+3. Vérifiez que `analyst1` ne peut plus insérer de données.
+
+== Exercice 3 : Journalisation par Déclencheurs (Triggers)
+
+=== Objectif
+Mettre en place une traçabilité automatique dans la table `audit_acteur_logs`.
+
+=== Travail à faire
+Créez trois déclencheurs (`TRIGGER`) sur la table `acteur` :
+
+1. `AFTER INSERT`
+2. `AFTER UPDATE`
+3. `AFTER DELETE`
+
+Pour chaque déclencheur, insérez une ligne dans la table `audit_acteur_logs` en renseignant :
+* `nom_utilisateur` : Utilisez la fonction `USER()` ou `CURRENT_USER()`.
+* `action` : 'INSERT', 'UPDATE' ou 'DELETE'.
+* `event_time` : `NOW()`.
+* `anciennes_valeurs` / `nouvelles_valeurs` : Concaténez les champs pertinents (Nom, Prénom).
+
+[TIP]
+====
+Pour le `UPDATE`, utilisez les mots-clés `OLD.nom_colonne` et `NEW.nom_colonne` pour récupérer les valeurs avant et après modification.
+====

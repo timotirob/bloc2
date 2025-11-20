@@ -1,0 +1,135 @@
+= Cours et TP : Sécurité Avancée et Audit sur SQL Server
+:toc: left
+:icons: font
+:source-highlighter: rouge
+:imagesdir: ../images
+
+== Introduction
+Ce cours et TP a pour objectif de comprendre puis mettre en œuvre la chaîne complète de sécurité sur SQL Server.
+
+Le schéma ci-dessous illustre la hiérarchie de sécurité dans SQL Server (Instance vs Base de données) :
+
+.Architecture de sécurité SQL Server (Login vs User)
+image::architecture_securite_sql.png[Schéma Architecture Sécurité, width=600, align="center"]
+
+Nous travaillerons sur un schéma dédié nommé `SECURITE`.
+
+Lorsqu'on se connecte à SQL Server Management Studio, on choisit le mode de connexion:
+
+.Mode de connexion SQL Server (SQL pur versus Active Directory versus Cloud ...)
+image::modeConnexionSQLServer.png[Mode de connexion SQL Server, width=600, align="center"]
+
+== Partie 0 : Mise en place de l'environnement
+Exécutez le script T-SQL suivant pour créer le schéma et les tables.
+
+[source,sql]
+----
+CREATE SCHEMA SECURITE;
+GO
+-- (Copier le reste du script de création des tables ici)
+----
+
+== Exercice 1 : Hiérarchie de sécurité (Logins, Users, Rôles)
+
+=== 1. Création du Login (Niveau Serveur)
+Créez un Login SQL Server nommé `controleurDonnees`.
+
+.Visualisation dans SSMS
+image::createLogin.png[Capture écran création Login SSMS, width=500]
+
+[source,sql]
+----
+CREATE LOGIN [controleurDonnees] WITH PASSWORD = 'MotDePasseFort!';
+----
+
+Le compte créé sera visible dans l’onglet Sécurité\Connexions de l’INSTANCE du server SQL Server considéré.
+
+.Visualisation du résultat dans l'instance
+image::loginDansInstance.png[Capture écran création Login SSMS, width=500]
+
+=== 2. Création de l'Utilisateur (Niveau Base de données)
+Créez un utilisateur associé à ce login.
+
+.Visualisation dans SSMS
+image::createUser.png[Capture écran création User SSMS, width=500]
+
+Explications:
+On crée un utilisateur nommé tim associé au compte SQL Server créé nommé EXEMPLESECURITE
+
+L’utilisateur créé sera visible dans l’onglet Sécurité\Utilisateurs de la BASE DE DONNES associée.
+
+.Visualisation du résultat dans l'instance
+image::userDansInstance.png[Capture écran création user dans Instance, width=500]
+
+[source,sql]
+----
+CREATE USER [controleurDonnees] FOR LOGIN [controleurDonnees];
+----
+
+=== 3. Création et assignation de Rôle
+1. Créez le rôle `controleurRole`.
+2. Ajoutez l'utilisateur à ce rôle.
+
+.Visualisation dans SSMS
+image::createRole.png[Capture écran gestion des rôles SSMS, width=500]
+
+Explications:
+
+Un rôle nommé software_reader_role est crée.
+
+Le rôle créé sera visible à l’emplacement Rôles\Rôles de base de données de la BASE DE DONNEES considérée.
+
+.Visualisation du résultat dans l'instance
+image::roleDansInstance.png[Capture écran création rôle dans Instance, width=500]
+
+
+[source,sql]
+----
+CREATE ROLE [controleurRole];
+ALTER ROLE [controleurRole] ADD MEMBER [controleurDonnees];
+----
+
+3. Atribution de rôle à l'utilisateur
+
+L’instruction ALTER ROLE permet d’attribuer des rôles à des utilisateurs.
+
+.Attribution du rôle software_reader_role à l'utilisateur tim
+image::alterRole.png[Capture écran création rôle dans Instance, width=500]
+
+Les membres d’un rôle sont visibles lorsqu’on examine les propriétés du rôle (click droit  Propriétés).
+
+.Visualisation des membres du rôle
+image::membresRole.png[Membres du rôle, width=500]
+
+=== 4. Configuration des Permissions
+
+L’instruction GRANT permet d’accorder des droits, nommés privilèges, à des utilisateurs ou à des rôles.
+Dans le cadre de ce cours, on distingue 2 formes particulières de l’instruction GRANT :
+
+* Assigner des rôles à des utilisateurs
+* Assigner des droits (privilèges) à des utilisateurs ou des rôles
+
+.Syntaxe GRANT
+image::syntaxeGrant.png[Syntaxe instruction GRANT, width=500]
+
+Appliquez les droits (GRANT/DENY) sur la table `SECURITE.REF_LIB_PAYS`.
+
+[source,sql]
+----
+GRANT INSERT ON SECURITE.REF_LIB_PAYS TO [controleurRole];
+DENY UPDATE, DELETE ON SECURITE.REF_LIB_PAYS TO [controleurRole];
+----
+
+== Exercice 2 : Audit par Déclencheurs
+
+=== 1. Table de journalisation
+Créez la table `SECURITE.JOURNAL`.
+
+=== 2. Trigger de Journalisation
+Créez le trigger `AFTER UPDATE`.
+
+=== 3. Trigger de Sécurité
+Créez le trigger `INSTEAD OF DELETE`.
+
+.Fonctionnement du Trigger INSTEAD OF
+image::schema_trigger_instead_of.png[Schéma fonctionnement Trigger, width=600]
