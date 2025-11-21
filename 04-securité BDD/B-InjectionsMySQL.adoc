@@ -5,9 +5,27 @@
 :experimental:
 
 == Introduction
+
+La sécurité d’une base de données MySQL est plus simple et succincte que celle abordée avec SQL Server la semaine dernière. Elle est abordée dans un deuxième document.
+Un autre aspect concerne la légitimité des données et du code exécuté par une base de données.
+Il s’agit de deux aspects complémentaires qui sont du domaine de la Cybersécurité et de la menace d’exécution de code malveillant via l’injection de données qui contiennent elles mêmes des instructions SQL.
+Les injections SQL ont longtemps représenté une menace majeure pour la sécurité des bases de données et des applications web.
+Elles permettent à un attaquant d'exécuter des commandes SQL malveillantes en manipulant les entrées utilisateur.
+
+=== Principe d'une injection SQL
+
 Les injections SQL (SQLi) sont une faille de sécurité web permettant à un attaquant d'interférer avec les requêtes qu'une application fait à sa base de données. Cela permet souvent de contourner l'authentification ou d'accéder à des données non autorisées.
 
 WARNING: Ce TP doit être réalisé dans un environnement de développement local (WAMP, XAMPP, Laragon). N'exécutez jamais d'attaques sur des serveurs de production.
+
+
+=== Objectifs du TP
+Les objectifs sont les suivants :
+
+-	Comprendre le fonctionnement des injections SQL.
+-	Identifier et exploiter une faille dans une application PHP vulnérable.
+-	Appliquer des bonnes pratiques pour sécuriser une application.
+
 
 == Partie 1 : Mise en place de l'environnement
 
