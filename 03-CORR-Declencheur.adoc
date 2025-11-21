@@ -1,0 +1,297 @@
+= CORRIGÉ : TP Déclencheurs (SQL Server & MySQL)
+:toc: left
+:icons: font
+:source-highlighter: rouge
+
+== Partie 4 : TP SQL Server
+
+=== TP 1 : "Mer et Soleil"
+
+==== 1. Initialisation du CA
+[source,sql]
+----
+UPDATE MERSOLEIL.CLIENT
+SET CA = (
+    SELECT SUM(l.PrixLoc)
+    FROM MERSOLEIL.LOCATION l
+    WHERE l.NumCli = MERSOLEIL.CLIENT.NumCli
+)
+WHERE EXISTS (
+    SELECT 1
+    FROM MERSOLEIL.LOCATION l
+    WHERE l.NumCli = MERSOLEIL.CLIENT.NumCli
+);
+----
+
+==== 2. Amélioration du trigger de formatage (Nom/Prénom)
+[source,sql]
+----
+CREATE OR ALTER TRIGGER MERSOLEIL.trg_Formatage_Client
+ON MERSOLEIL.Client
+FOR INSERT, UPDATE
+AS
+UPDATE MERSOLEIL.CLIENT
+SET
+    NomCli = UPPER(i.NomCli),
+    PrenomCli = UPPER(LEFT(i.PrenomCli, 1)) + LOWER(SUBSTRING(i.PrenomCli, 2, LEN(i.PrenomCli)))
+FROM
+    MERSOLEIL.CLIENT c
+INNER JOIN
+    inserted i ON c.NumCli = i.NumCli;
+----
+
+==== 3. Test Historisation
+[source,sql]
+----
+-- Vérifier l'état avant
+SELECT * FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+SELECT * FROM MERSOLEIL.HISTOLOC;
+
+-- Test
+DELETE FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+
+-- Vérifier l'état après
+SELECT * FROM MERSOLEIL.LOCATION WHERE NumLoc = 1;
+SELECT * FROM MERSOLEIL.HISTOLOC;
+----
+
+==== 4. Trigger de mise à jour automatique du CA
+[source,sql]
+----
+CREATE OR ALTER TRIGGER MERSOLEIL.trg_Update_CA_Client
+ON MERSOLEIL.LOCATION
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cas 1: INSERTION (Ajout)
+    UPDATE c
+    SET c.CA = c.CA + i.TotalPrix
+    FROM MERSOLEIL.CLIENT c
+    INNER JOIN (
+        SELECT NumCli, SUM(PrixLoc) AS TotalPrix
+        FROM inserted GROUP BY NumCli
+    ) AS i ON c.NumCli = i.NumCli;
+
+    -- Cas 2: SUPPRESSION (Retrait)
+    UPDATE c
+    SET c.CA = c.CA - d.TotalPrix
+    FROM MERSOLEIL.CLIENT c
+    INNER JOIN (
+        SELECT NumCli, SUM(PrixLoc) AS TotalPrix
+        FROM deleted GROUP BY NumCli
+    ) AS d ON c.NumCli = d.NumCli;
+END;
+----
+
+=== TP 2 : "Formation des Élèves"
+
+==== 1. Test du trigger Limite Langages
+[source,sql]
+----
+-- On insère jusqu'à l'échec
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'C#');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'Python');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'Java');
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'PHP');
+-- La 5ème insertion doit échouer
+INSERT INTO PROCS.COMPETENCES_LANGAGE_INFO(ID_ELEVE, LANGAGE_INFO) VALUES (1, 'SQL');
+----
+
+==== 2. Création Table Compétence Méthode
+[source,sql]
+----
+CREATE TABLE PROCS.COMPETENCE_METHODE (
+    ID_ELEVE INT NOT NULL,
+    METHODE VARCHAR(50) NOT NULL,
+    PRIMARY KEY (ID_ELEVE, METHODE)
+);
+-- Ajout du compteur dans la table élève pour faciliter le trigger
+ALTER TABLE PROCS.FORMATIONELEVES
+ADD NB_METHODE INT DEFAULT 0;
+----
+
+==== 3. Trigger Limite Méthodes (Max 2)
+[source,sql]
+----
+CREATE OR ALTER TRIGGER PROCS.trg_Limit_Methode
+ON PROCS.COMPETENCE_METHODE
+AFTER INSERT
+AS
+BEGIN
+    DECLARE @ID_ELEVE_INS INT;
+    SELECT @ID_ELEVE_INS = ID_ELEVE FROM inserted;
+
+    DECLARE @NB_METHODE INT;
+    SELECT @NB_METHODE = ISNULL(NB_METHODE, 0)
+    FROM PROCS.FORMATIONELEVES
+    WHERE ID_ELEVE = @ID_ELEVE_INS;
+
+    IF @NB_METHODE < 2
+    BEGIN
+        -- Mettre à jour le compteur
+        UPDATE PROCS.FORMATIONELEVES
+        SET NB_METHODE = @NB_METHODE + 1
+        WHERE ID_ELEVE = @ID_ELEVE_INS;
+    END
+    ELSE
+    BEGIN
+        ROLLBACK TRANSACTION;
+        THROW 50010, 'Limite de 2 méthodes atteintes pour cet élève.', 1;
+    END;
+END;
+----
+
+=== TP 3 : "Compagnie Aérienne"
+
+==== Exercice 1 : Trigger DELETE
+[source,sql]
+----
+CREATE TRIGGER E_qua_D_qualifs
+ON T_qualifs_qua
+AFTER DELETE
+AS
+BEGIN
+ UPDATE  T_pilote_pil
+   SET   pil_nbqualif = pil_nbqualif - 1
+   WHERE pil_brevet IN (SELECT pil_brevet FROM DELETED);
+END;
+----
+
+==== Exercice 2 : Trigger INSERT
+[source,sql]
+----
+CREATE TRIGGER E_qua_I_qualifs
+ON T_qualifs_qua AFTER INSERT AS
+BEGIN
+ DECLARE @nb_qualifs TINYINT;
+ SELECT @nb_qualifs = pil_nbqualif FROM T_pilote_pil
+   WHERE pil_brevet = (SELECT pil_brevet FROM INSERTED);
+ IF @nb_qualifs < 3
+     UPDATE T_pilote_pil
+     SET   pil_nbqualif = pil_nbqualif + 1
+     WHERE pil_brevet=(SELECT pil_brevet FROM INSERTED);
+ ELSE
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50002,'Le pilote a déjà 3 qualifications',1;
+  END;
+END;
+----
+
+==== Exercice 3 : Trigger UPDATE
+[source,sql]
+----
+CREATE TRIGGER E_qua_U_qualifs
+ON T_qualifs_qua
+AFTER UPDATE
+AS
+BEGIN
+-- Règle 1: Interdire la MAJ du type d'avion
+IF UPDATE(typ_typa)
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50003,'Mise à jour qualification interdite',1;
+  END;
+
+-- Règle 2: Gérer le changement de pilote
+IF UPDATE(pil_brevet)
+ BEGIN
+ DECLARE @nb_qualifs TINYINT;
+ SELECT @nb_qualifs = pil_nbqualif FROM T_pilote_pil
+   WHERE pil_brevet = (SELECT pil_brevet FROM INSERTED);
+
+ IF @nb_qualifs < 3
+   BEGIN
+    -- Incrémenter le nouveau pilote
+    UPDATE T_pilote_pil
+     SET   pil_nbqualif = pil_nbqualif + 1
+     WHERE pil_brevet=(SELECT pil_brevet FROM INSERTED);
+    -- Décrémenter l'ancien pilote
+    UPDATE  T_pilote_pil
+     SET   pil_nbqualif = pil_nbqualif - 1
+     WHERE pil_brevet IN (SELECT pil_brevet FROM DELETED);
+   END;
+ ELSE
+  BEGIN
+   ROLLBACK TRANSACTION;
+   THROW 50002,'Le pilote a déjà 3 qualifications',1;
+  END;
+ END;
+END;
+----
+
+== Partie 6 : TP MySQL "Easy2Drive"
+
+=== Analyse et Correction
+
+==== a) Analyse des problèmes
+* **Condition 2 manquante** : Le nombre d'examens blancs n'est pas vérifié.
+* **Condition 4 inversée** : La condition `DATE_ADD(...) >= NOW()` valide l'échec s'il est *récent*, mais lève une erreur. La logique est inversée.
+* **Condition 5 (Logique)** : Il vaut mieux vérifier si `garantieReussite` est déjà à 1 plutôt que si `OLD.echec = NEW.echec`.
+
+==== b) Code Corrigé du Trigger
+[source,mysql]
+----
+BEGIN
+    DECLARE v_nbSerie INT;
+    DECLARE v_nbExamen INT; -- Ajout variable
+    DECLARE v_scoreMoyen DOUBLE;
+
+    -- On ne vérifie que si on passe un échec à 1
+    IF OLD.echecEtg = 0 AND NEW.echecEtg = 1 THEN
+
+        -- CORRECTION Condition 5 : Garantie déjà accordée
+        IF OLD.garantieReussite = 1 THEN
+            SIGNAL SQLSTATE '10001' SET MESSAGE_TEXT = 'Garantie déjà accordée.';
+        END IF;
+
+        -- CORRECTION Condition 4 : Logique de date
+        IF DATE_ADD(NEW.dateEtg, INTERVAL 6 MONTH) < NOW() THEN
+            SIGNAL SQLSTATE '10002' SET MESSAGE_TEXT = 'Echec trop ancien.';
+        END IF;
+
+        -- Condition 1 : Séries
+        SELECT COUNT(*) INTO v_nbSerie FROM Evaluer WHERE idEleve = NEW.idUtilisateur;
+        IF v_nbSerie < 25 THEN
+            SIGNAL SQLSTATE '10003' SET MESSAGE_TEXT = 'Séries insuffisantes.';
+        END IF;
+
+        -- AJOUT Condition 2 : Examens blancs
+        SELECT COUNT(*) INTO v_nbExamen FROM Passer WHERE idEleve = NEW.idUtilisateur;
+        IF v_nbExamen < 4 THEN
+            SIGNAL SQLSTATE '10004' SET MESSAGE_TEXT = 'Examens blancs insuffisants.';
+        END IF;
+
+        -- Condition 3 : Moyenne
+        SELECT AVG(examenScore) INTO v_scoreMoyen FROM (
+            SELECT examenScore FROM Passer WHERE idEleve = NEW.idUtilisateur
+            ORDER BY examenScore DESC LIMIT 4
+        ) AS MeilleureNotes;
+
+        IF v_scoreMoyen < 34 OR v_scoreMoyen IS NULL THEN
+            SIGNAL SQLSTATE '10005' SET MESSAGE_TEXT = 'Moyenne insuffisante.';
+        END IF;
+
+        -- Succès
+        SET NEW.garantieReussite = 1;
+    END IF;
+END
+----
+
+==== Exercice Pratique (Tests)
+
+[source,mysql]
+----
+-- Test 10001 (Déjà accordé)
+UPDATE Eleve SET echecETG = 1, dateETG = CURDATE() WHERE idUtilisateur = 1;
+
+-- Test 10002 (Échec trop ancien)
+UPDATE Eleve SET echecETG = 1, dateETG = '2020-01-01' WHERE idUtilisateur = 3;
+
+-- Test 10003 (Séries insuffisantes)
+UPDATE Eleve SET echecETG = 1, dateETG = CURDATE() WHERE idUtilisateur = 2;
+
+-- Test 10004 (Examens blancs insuffisants - sur un élève vide)
+UPDATE Eleve SET echecETG = 1, dateETG = CURDATE() WHERE idUtilisateur = 3;
+----
