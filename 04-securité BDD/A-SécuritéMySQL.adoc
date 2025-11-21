@@ -1,7 +1,8 @@
-= TP : Sécurité des données sur MySQL
+= Cours et TP : Sécurité des données sur MySQL
 :toc: left
 :icons: font
 :source-highlighter: rouge
+:imagesdir: ../images
 
 == Introduction
 La sécurité sous MySQL diffère de celle de SQL Server. La notion de Connexion et d'utilisateur est souvent confondue.
@@ -226,6 +227,89 @@ CREATE TABLE audit_acteur_logs (
 
 ----
 
+== Principes de base
+
+Sur MySQL la notion de Connexion et d’utilisateur sont confondues.
+
+Historiquement des droits, tels que lecture (SELECT), mise à jour (UPDATE), suppression (DELETE) sont donnés à des utilisateurs sur des objets (le plus souvent des tables).
+
+On peut également utiliser des rôles comme sous SQL Server mais:
+
+* c'est relativement récent sur MySQL
+* ce n’est pas présenté comme une bonne pratique systématique et souvent des droits sont donnés directement aux utilisateurs (en tout cas dans les études de cas).
+
+=== Principes d'authentification
+
+L’authentification se fait essentiellement, par défaut, à un utilisateur associé à une machine, adresse IP ou encore masque réseau
+La création d’utilisateur obéit à la syntaxe suivante :
+
+.Création d'un utilisateur sur MySQL
+image::userMySQL.png[Capture écran création Login MySQL, width=500]
+
+
+Typique documentation étude de cas. Simplissime mais 50% des étudiants perdent la moitié des points là-dessus, seuls 10 % prennent tous les points
+
+1.	On remplace par l’identifiant demandé dans le contexte
+2.	On remplace par le nom DNS de la machine ou bien l’adresse IP du contexte
+3.	On utilise un mot de passe fort, au moins 10 caractère, min, maj, nombre, car spécial, surtout quand c’est traité dans le contexte !
+
+De nombreuses options complémentaires peuvent demander  un mot de passe fort avec SHA2, bloquer le compte après X tentatives, expirer le compte après un délai etc
+
+On peut également crée l’utilisateur dans PHP My Admin ou Heidi … mais vous n’aurez pas d’interface en étude de cas !
+
+.Création d'un utilisateur en interactif sur MySQL. Commodité (hors EDC)
+image::HeidiUser.png[Capture écran création Login MySQL sur HeidiSQL, width=500]
+
+Etapes :
+
+1.	On ajoute un compte utilisateur
+2.	On précise à partir de quel emplacement sur le réseau (ou bien le serveur) il peut se connecter à la base de données
+3.	Ensuite on indique les privilèges auxquels il a droit,
+a.	soit globaux, ce qui est à éviter en raison du principe de moindre privilège,
+b.	soit liés à une base de données : voir ci-dessous pour la commande MySQL correspondante
+
+=== Types de droits
+MySQL distingue les droits : https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html
+
+-	Administrateur : droits globaux non spécifique à une base de données
+-	Les privilèges d’une base de données s’appliquent à tous les objets contenus
+-	Les privilèges pour les objets de bases de données tels que les tables, indexes, vues et procédures stockées peuvent être octroyés à des objets spécifiques ou globalement
+
+
+==== Syntaxe pour un utilisateur
+La syntaxe générale est la suivante :
+
+.Droits utilisateurs sur MySQL. Commodité (hors EDC)
+image::droitsUser.png[Droits utilisateurs sur MySQL, width=500]
+
+Remarque : attention à la syntaxe : le @ n’est pas à l’intérieur des quotes, il délimite le nom de l’utilisateur et le FQDN (Fully Qualified Domain Name).
+
+==== Syntaxe pour un rôle
+Non donné ici. Similaire à SQL Server.
+
+=== Principaux droits
+
+Les principaux droits sont les suivants :
+
+•	ALL PRIVILEGES – l’utilisateur obtient tous les privilèges
+Remarque : ne devrait jamais se produire en étude de cas. Moyen de perdre tous les points. Cf principes du moindre privilège.
+•	CREATE – L’utilisateur obtient le droit de créer des bases de données et des tables
+•	DROP – L’utilisateur obtient le droit de supprimer des bases de données et des tables
+•	DELETE – L’utilisateur obtient le droit de supprimer des données (lignes) des tables spécifiées
+•	INSERT – L’utilisateur obtient le droit d’insérer des données (lignes) dans une table spécifiée
+•	SELECT – L’utilisateur obtient le droit de lire (sélectionner) des données dans une base de données ou une table
+•	UPDATE – L’utilisateur obtient le droit de mettre à jour des données dans une table
+
+Liste exhaustive des droits: https://dev.mysql.com/doc/refman/8.4/en/privileges-provided.html
+
+
+=== Suppression des droits
+
+La commande Revoke permet de retirer des droits à un utilisateur ou un rôle.
+
+https://dev.mysql.com/doc/refman/8.4/en/creating-accounts.html#revoking-account-privileges
+
+
 == Rappels de Syntaxe (Aide Mémoire)
 
 === Création d'utilisateur
@@ -302,6 +386,17 @@ mysql -u test -p
 * Vérifiez que vous **ne pouvez pas** supprimer (`DROP`) une table.
 * Vérifiez que vous n'avez pas accès aux autres bases de données (ex: `mysql`, `sys`).
 
+
+Check-lists : en cas d’échec
+
+-	Identifiants incorrects
+-	Restrictions d’accès dans le parefeu
+- Testez en ligne de commande en mode terminal
+
+Par exemple, pour l’utilisateur test, vérifiez qu’il a accès en lecture aux tables acteur et casting (via un SELECT par exemple) mais pas aux autres tables.
+Toujours pour cet utilisateur, vérifiez qu’il n’a pas accès aux autres bases de données (instruction USE pour changer de base de données).
+
+
 == Exercice 2 : Rôles et Permissions
 
 === Objectif
@@ -337,6 +432,7 @@ Créez trois déclencheurs (`TRIGGER`) sur la table `acteur` :
 3. `AFTER DELETE`
 
 Pour chaque déclencheur, insérez une ligne dans la table `audit_acteur_logs` en renseignant :
+
 * `nom_utilisateur` : Utilisez la fonction `USER()` ou `CURRENT_USER()`.
 * `action` : 'INSERT', 'UPDATE' ou 'DELETE'.
 * `event_time` : `NOW()`.

@@ -4,7 +4,27 @@
 :source-highlighter: rouge
 :imagesdir: ../images
 
-== Introduction
+== Cours Introduction
+=== Sécurité des bases de données
+
+La sécurité des bases de données est gérée le plus souvent à plusieurs niveaux :
+
+* Système:
+- Authentification : pas d’accès généralisé (login) au serveur où se situe la Base de données
+- Droits – autorisations : pas d’accès généralisé en lecture et écriture aux partitions ou fichiers où se situent les données du SGBD
+Rmq : au moment de la mise en place de la base de données, l'administrateur système va autoriser à la base de données d'écrire sur différents disques, de s'étendre jusqu'à un certain niveau, d'utiliser un certain nombre de ressources telles que RAM, processeurs etc
+* Base de données:
+- Authentification : accès aux utilisateurs de confiance seulement
+- Droits – autorisations pour la base de données : instructions GRANT et REVOKE pour définir et limiter les opérations possibles pour chaque utilisateur ou groupe.
+
+* Applicatif : le concepteur de l'application, logiciel ou progiciel qui effectue les accès à la base de la données met en place une authentification dédiée pour l'application, ou qui s'appuie sur un annuaire LDAP
+
+* Modélisation : le concepteur de la base de données va utiliser des Vues SQL pour sécuriser et synthétiser l’accès aux données
+
+Le périmètre de ce cours aujourd’hui concerne les parties _Base de données_ et _Applicatif_.
+La partie Système est vue en SISR et la partie Modélisation sera abordée avec les Vues SQL (déjà vu en 1ère année)
+
+=== Sécurité SQL Server
 Ce cours et TP a pour objectif de comprendre puis mettre en œuvre la chaîne complète de sécurité sur SQL Server.
 
 Le schéma ci-dessous illustre la hiérarchie de sécurité dans SQL Server (Instance vs Base de données) :
@@ -19,7 +39,7 @@ Lorsqu'on se connecte à SQL Server Management Studio, on choisit le mode de con
 .Mode de connexion SQL Server (SQL pur versus Active Directory versus Cloud ...)
 image::modeConnexionSQLServer.png[Mode de connexion SQL Server, width=600, align="center"]
 
-== Partie 0 : Mise en place de l'environnement
+== Mise en place de l'environnement
 Exécutez le script T-SQL suivant pour créer le schéma et les tables.
 
 [source,sql]
@@ -29,10 +49,10 @@ GO
 -- (Copier le reste du script de création des tables ici)
 ----
 
-== Exercice 1 : Hiérarchie de sécurité (Logins, Users, Rôles)
+== Hiérarchie de sécurité (Logins, Users, Rôles)
 
 === 1. Création du Login (Niveau Serveur)
-Créez un Login SQL Server nommé `controleurDonnees`.
+Ci dessous on illustre la création d' un Login SQL Server nommé `controleurDonnees`.
 
 .Visualisation dans SSMS
 image::createLogin.png[Capture écran création Login SSMS, width=500]
@@ -48,7 +68,7 @@ Le compte créé sera visible dans l’onglet Sécurité\Connexions de l’INSTA
 image::loginDansInstance.png[Capture écran création Login SSMS, width=500]
 
 === 2. Création de l'Utilisateur (Niveau Base de données)
-Créez un utilisateur associé à ce login.
+Associé au login, on crée ensuite un utilisateur associé.
 
 .Visualisation dans SSMS
 image::createUser.png[Capture écran création User SSMS, width=500]
@@ -102,7 +122,7 @@ Les membres d’un rôle sont visibles lorsqu’on examine les propriétés du r
 image::membresRole.png[Membres du rôle, width=500]
 
 === 4. Configuration des Permissions
-
+==== Octroi d'un rôle: GRANT
 L’instruction GRANT permet d’accorder des droits, nommés privilèges, à des utilisateurs ou à des rôles.
 Dans le cadre de ce cours, on distingue 2 formes particulières de l’instruction GRANT :
 
@@ -112,24 +132,112 @@ Dans le cadre de ce cours, on distingue 2 formes particulières de l’instructi
 .Syntaxe GRANT
 image::syntaxeGrant.png[Syntaxe instruction GRANT, width=500]
 
-Appliquez les droits (GRANT/DENY) sur la table `SECURITE.REF_LIB_PAYS`.
+Nous voulons autoriser l’utilisateur tim , via son rôle software_reader_role, à effectuer des instructions SELECT sur toutes les colonnes de la table SECURITE.REF_LIB_REGION.
 
+
+.Attribution des droits SELECT au rôle software_reader_role pour la table SECURITE.REF_LIB_REGION
+image::selectRole.png[Droit SELECT du rôle, width=500]
+
+Explications :
+
+1.	les rôles permettent d’éviter des erreurs, et de gagner en productivité, puisqu’on peut assigner plusieurs
+utilisateurs à un ou plusieurs rôles, et ensuite préciser quel rôle est actif.
+Ces précisions peuvent être fournies par l’application, ce qui permet de combiner une sécurité Base de données avec une sécurité applicative.
+
+2.	Cela évite de donner des droits inconditionnels à des utilisateurs sur des tables, pour des UPDATE ou DELETE par
+exemple. Via les rôles, c’est seulement dans un contexte donné, qu’ils peuvent avoir ces droits.
+
+
+Remarque : on peut accorder donc des droits directement à un utilisateur (database_user) ou un utilisateur mappé à un user windows, mais ce n’est pas la meilleure pratique : on préfère passer par la notion de rôle.
+
+==== Suppression de droits : REVOKE
+
+Suppression de rôle pour un utilisateur
 [source,sql]
 ----
-GRANT INSERT ON SECURITE.REF_LIB_PAYS TO [controleurRole];
-DENY UPDATE, DELETE ON SECURITE.REF_LIB_PAYS TO [controleurRole];
+REVOKE roleName FROM user
 ----
 
-== Exercice 2 : Audit par Déclencheurs
+Révoque, c'est-à-dire enlève le role roleName aux utilisateurs mentionnés dans user
 
-=== 1. Table de journalisation
-Créez la table `SECURITE.JOURNAL`.
+Suppression d'un privilège
+[source,sql]
+----
+REVOKE privilege-type ON OBJECT:: { table-Name} FROM grantees
+----
+Révoque le privilège sur un objet pour les grantees
 
-=== 2. Trigger de Journalisation
-Créez le trigger `AFTER UPDATE`.
+Exemple 6 :
+Nous n’avons plus besoin d’autoriser les utilisateurs ayant le rôle software_reader_role à accéder à la table SECURITE.REF_LIB_REGION.
 
-=== 3. Trigger de Sécurité
-Créez le trigger `INSTEAD OF DELETE`.
+.Suppression des droits SELECT (lecture) au rôle software_reader_role pour la table SECURITE.REF_LIB_REGION
+image::revokeSelect.png[Droit SELECT du rôle, width=500]
 
-.Fonctionnement du Trigger INSTEAD OF
-image::schema_trigger_instead_of.png[Schéma fonctionnement Trigger, width=600]
+Explications :
+Lors d’un contexte SOFTWARE_READER_ROLE, les utilisateurs assigné au rôle SOFTWARE_READER_ROLE n’auront plus d’autorisation de SELECT pour la table SECURITE.REF_LIB_REGION.
+
+
+== Exercice 1 : Mise en place de la sécurité de base SQL Server
+
+=== Objectif : Création d’un compte SQL et sécurisation d’une base de données
+
+Les étapes sont les suivantes
+
+1.	Créer un Login pour une connexion pure SQL.
+2.	Ensuite créer un utilisateur associé à ce login.
+3.	Créer un rôle nommé droitDonnees
+4.	Ajoutez l’utilisateur à ce rôle
+5.	Donnez les droits de lecture et modification sur la table SECURITE.REF_LIB_PAYS à ce rôle droitDonnees
+6.	Donnez les droits de lecture uniquement sur la table SECURITE.REF_LIB_REGION à ce rôle droitDonnees
+
+=== Questions
+
+1.	Où est créé le Login de la question 1 ? Screenshot
+2.	Où est créé le User de la question 2 ? Screenshot
+3.	Où est créé le rôle de la question 3 ? Screenshot
+4.	Le prof a trouvé une requête sur stack qu’il ne comprend pas (015…). Expliquez lui ce que produit cette requête.
+
+Pour les screenshots, on regardera comment les inclure dans le code source de ce document (image::)
+
+=== Tests & preuves:
+==== Etape 1 : Déconnectez-vous
+==== Etape 2 : Reconnectez-vous avec une connexion SQL server en utilisant le login et motDePasse définis à l’étape 1
+
+1.	Quelles tables pouvez-vous lire ? Preuve
+2.	Quelles tables pouvez-vous modifier ?
+
+==== Etape 3 : Essayez de changer le libellé de ‘Belgique’ en ‘Belgique La Frite’. Que se passe t’il ?
+
+Effectuez la modification nécessaire pour pouvoir changer le libellé de Belgique en Belgique la Frite et documentez la procédure.
+
+
+== Exercice 2 : Audit et sécurité par Déclencheurs
+
+=== Objectifs
+On va approfondir quelques éléments :
+
+* La gestion fine des permissions.
+* L’utilisation de triggers pour renforcer la sécurité des données (lien avec les cours précédents).
+* La journalisation des modifications (contexte DICP / RGPD pour documenter les actions malveillantes ou accidentelles).
+
+=== Travail à faire
+
+. Créer un Login supplémentaire avec une connexion SQL Server.
+. Créez un utilisateur nommé `controleurDonnees` associé à ce login.
+. Ajoutez cet utilisateur à un nouveau rôle nommé `controleurRole`.
+. Configurer les droits pour `controleurRole` :
+* Autorisez uniquement l’insertion de données dans la table `SECURITE.REF_LIB_PAYS`.
+* Interdisez explicitement toute modification ou suppression de données dans cette table.
+. Créer un trigger DML (LMD) pour la journalisation. +
+Sur la table `SECURITE.REF_LIB_PAYS`, créez un trigger (déclencheur) qui enregistre dans une table `SECURITE.JOURNAL` les informations suivantes pour chaque mise à jour :
+* Date et heure de l’opération.
+* Nom de l’utilisateur ayant effectué l’opération.
+* Anciennes et nouvelles valeurs des colonnes modifiées.
+. Créer un trigger pour empêcher des suppressions non autorisées. +
+Ajoutez un trigger à la table `SECURITE.REF_LIB_PAYS` qui bloque toute tentative de suppression pour les utilisateurs n'appartenant pas au rôle `adminRole`.
+
+=== Test de la configuration
+
+. **Etape 1** : Insérez des données dans la table `SECURITE.REF_LIB_PAYS` avec le compte `controleurDonnees`.
+. **Etape 2** : Tentez de modifier et de supprimer les données avec le même compte pour vérifier le comportement (les blocages configurés plus haut).
+. **Etape 3** : Vérifiez que la journalisation fonctionne correctement (consultation de la table `SECURITE.JOURNAL`).
