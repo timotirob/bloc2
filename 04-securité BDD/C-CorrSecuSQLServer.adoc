@@ -1,0 +1,102 @@
+= CORRECTION : TP Sécurité Avancée et Audit SQL Server
+:toc: left
+:icons: font
+:source-highlighter: rouge
+
+== Exercice 1 : Mise en place de la sécurité de base
+
+=== Scripts de correction
+
+[source,sql]
+----
+-- 1. Création du Login (Niveau Serveur)
+CREATE LOGIN [monLoginSQL] WITH PASSWORD = 'Password123!';
+
+-- 2. Création du User (Niveau BDD)
+USE [NomDeVotreBase];
+CREATE USER [monUserBDD] FOR LOGIN [monLoginSQL];
+
+-- 3. Création du Rôle
+CREATE ROLE [droitDonnees];
+
+-- 4. Ajout de l'utilisateur au rôle
+ALTER ROLE [droitDonnees] ADD MEMBER [monUserBDD];
+
+-- 5 & 6. Attribution des permissions
+-- Lecture et Modification sur PAYS
+GRANT SELECT, INSERT, UPDATE, DELETE ON SECURITE.REF_LIB_PAYS TO [droitDonnees];
+-- Lecture seule sur REGION
+GRANT SELECT ON SECURITE.REF_LIB_REGION TO [droitDonnees];
+----
+
+=== Réponses aux questions
+
+1.  **Login :** Créé au niveau de l'instance SQL Server (Dossier Sécurité > Connexions).
+2.  **User :** Créé au niveau de la base de données spécifique (Dossier Sécurité > Utilisateurs).
+3.  **Différence :** Le Login sert à entrer sur le serveur (Authentification). Le User sert à accéder aux données d'une base (Autorisation).
+
+== Exercice 2 : Audit et Triggers de sécurité
+
+=== 1. Configuration Utilisateur et Rôle Contrôleur
+
+[source,sql]
+----
+CREATE LOGIN [controleurDonnees] WITH PASSWORD = 'StrongPass!2024';
+CREATE USER [controleurDonnees] FOR LOGIN [controleurDonnees];
+CREATE ROLE [controleurRole];
+ALTER ROLE [controleurRole] ADD MEMBER [controleurDonnees];
+
+-- Permissions strictes
+GRANT INSERT ON SECURITE.REF_LIB_PAYS TO [controleurRole];
+DENY UPDATE, DELETE ON SECURITE.REF_LIB_PAYS TO [controleurRole];
+----
+
+=== 2. Trigger de Journalisation (Audit)
+
+[source,sql]
+----
+CREATE TRIGGER TRG_AUDIT_PAYS_UPDATE
+ON SECURITE.REF_LIB_PAYS
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO SECURITE.JOURNAL (DateOperation, Utilisateur, Operation, AnciennesValeurs, NouvellesValeurs)
+    SELECT
+        GETDATE(),
+        SYSTEM_USER,
+        'UPDATE',
+        CONCAT('Code: ', d.CODE_PAYS, ' Lib: ', d.LIB_PAYS), -- Anciennes valeurs (Deleted)
+        CONCAT('Code: ', i.CODE_PAYS, ' Lib: ', i.LIB_PAYS)  -- Nouvelles valeurs (Inserted)
+    FROM INSERTED i
+    INNER JOIN DELETED d ON i.ID_PAYS = d.ID_PAYS;
+END;
+----
+
+=== 3. Trigger de Sécurité (Blocage Suppression)
+
+[source,sql]
+----
+CREATE TRIGGER TRG_SECU_PAYS_DELETE
+ON SECURITE.REF_LIB_PAYS
+INSTEAD OF DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Vérifie si l'utilisateur est membre du rôle adminRole (ou sysadmin)
+    -- IS_MEMBER renvoie 1 si vrai
+    IF (IS_MEMBER('adminRole') = 0 AND IS_SRVROLEMEMBER('sysadmin') = 0)
+    begin
+        -- Lève une erreur bloquante
+        THROW 51000, 'ACCES REFUSE : Suppression interdite pour votre profil.', 1;
+    end
+    ELSE
+    begin
+        -- Si autorisé, on effectue la suppression réelle
+        DELETE FROM SECURITE.REF_LIB_PAYS
+        WHERE ID_PAYS IN (SELECT ID_PAYS FROM DELETED);
+    end
+END;
+----

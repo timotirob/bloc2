@@ -1,0 +1,74 @@
+= CORRECTION : TP Injections SQL (SQLi)
+:toc: left
+:icons: font
+:source-highlighter: rouge
+
+== Analyse et Exploitation
+
+=== 1. Pourquoi le code est-il vulnérable ?
+
+Le code PHP construit la requête SQL en concaténant directement les chaînes de caractères saisies par l'utilisateur :
+
+[source,php]
+$query = "SELECT * FROM utilisateurs WHERE login = '$username' AND password = '$password'";
+
+Si l'utilisateur saisit des caractères spéciaux SQL (comme `'`), il peut "sortir" de la chaîne de caractères prévue et écrire ses propres commandes SQL qui seront exécutées par le serveur.
+
+=== 2. Explication de l'attaque
+
+Saisie injectée dans le mot de passe : `' OR 1=1 --`
+
+La requête finale générée devient :
+[source,sql]
+SELECT * FROM utilisateurs WHERE login = '...' AND password = '' OR 1=1 --'
+
+* Le premier `'` ferme la zone de mot de passe vide.
+* `OR 1=1` ajoute une condition qui est **toujours vraie**.
+* `--` met en commentaire la fin de la requête (le dernier guillemet PHP), évitant une erreur de syntaxe.
+
+**Résultat :** La base de données renvoie "Vrai" pour la condition, et l'application connecte l'utilisateur (souvent en tant que premier utilisateur de la table, ici l'admin).
+
+== Patch Correctif (injection_protection.php)
+
+Le code sécurisé utilise `PDO::prepare` pour séparer la requête SQL des données.
+
+[source,php]
+----
+<?php
+$dsn = "mysql:host=localhost;dbname=phppdb;charset=utf8";
+$utilisateur = "root";
+$motdepasse = "";
+
+try {
+    $pdo = new PDO($dsn, $utilisateur, $motdepasse);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Erreur de connexion à la base de données : " . $e->getMessage());
+}
+
+$username = $_POST['identifiant'];
+$password = $_POST['motDePasse'];
+
+// --- CORRECTION ---
+// Utilisation de marqueurs nommés (:username, :password)
+$query = "SELECT * FROM utilisateurs WHERE login = :username AND password = :password";
+
+// Préparation de la requête (le moteur SQL analyse la structure avant d'avoir les données)
+$stmt = $pdo->prepare($query);
+
+// Liaison des paramètres (Binding)
+// Cela garantit que le contenu est traité comme du texte pur, jamais comme du code SQL
+$stmt->bindParam(':username', $username, PDO::PARAM_STR);
+$stmt->bindParam(':password', $password, PDO::PARAM_STR);
+
+// Exécution
+$stmt->execute();
+// ------------------
+
+if ($stmt->rowCount() > 0) {
+    echo "Bienvenue, " . htmlspecialchars($username) . " !"; // htmlspecialchars pour éviter les failles XSS
+} else {
+    echo "Échec de l'authentification.";
+}
+?>
+----

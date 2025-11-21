@@ -1,0 +1,130 @@
+= CORRECTION : TP Sécurité des données sur MySQL
+:toc: left
+:icons: font
+:source-highlighter: rouge
+
+== Exercice 1 : Gestion des utilisateurs et privilèges
+
+=== 1. Création des utilisateurs
+
+[source,sql]
+----
+-- Création de l'utilisateur admin (accès global)
+CREATE USER 'moi'@'%' IDENTIFIED BY 'MonMotDePasseFort!';
+
+-- Création de l'utilisateur local de test
+CREATE USER 'test'@'localhost' IDENTIFIED BY 'TestPassword!';
+
+-- Création de l'utilisateur distant (binome)
+-- Remplacer 192.168.1.50 par l'IP réelle du binôme
+CREATE USER 'binome'@'192.168.1.50' IDENTIFIED BY 'BinomePass!';
+----
+
+=== 2. Attribution des droits (Moindre privilège)
+
+[source,sql]
+----
+-- Droits complets pour "moi"
+GRANT ALL PRIVILEGES ON securite_mysql.* TO 'moi'@'%';
+
+-- Droits restreints pour "binome" (Lecture seule sur 2 tables)
+GRANT SELECT ON securite_mysql.acteur TO 'binome'@'192.168.1.50';
+GRANT SELECT ON securite_mysql.casting TO 'binome'@'192.168.1.50';
+
+-- Droits lecture/écriture pour "test"
+GRANT SELECT, UPDATE ON securite_mysql.* TO 'test'@'localhost';
+
+-- Appliquer les changements
+FLUSH PRIVILEGES;
+----
+
+[IMPORTANT]
+.Pourquoi éviter GRANT ALL ?
+====
+L'instruction `GRANT ALL PRIVILEGES` donne tous les droits possibles. Si ce compte est compromis, l'attaquant a le contrôle total (suppression de tables, changement de structure, vol de données). Le **principe de moindre privilège** impose de ne donner que les droits strictement nécessaires à la fonction de l'utilisateur.
+====
+
+== Exercice 2 : Rôles et Permissions
+
+=== 1. Création du rôle et attribution des droits
+
+[source,sql]
+----
+-- Création du rôle
+CREATE ROLE 'dataAnalyst';
+
+-- Attribution des droits au rôle
+GRANT SELECT ON securite_mysql.* TO 'dataAnalyst';
+GRANT INSERT ON securite_mysql.logs TO 'dataAnalyst';
+----
+
+=== 2. Gestion des membres
+
+[source,sql]
+----
+-- Création des utilisateurs
+CREATE USER 'analyst1'@'localhost' IDENTIFIED BY 'pwd1';
+CREATE USER 'analyst2'@'%' IDENTIFIED BY 'pwd2';
+
+-- Assignation du rôle
+GRANT 'dataAnalyst' TO 'analyst1'@'localhost';
+GRANT 'dataAnalyst' TO 'analyst2'@'%';
+
+-- Activation du rôle par défaut (optionnel mais pratique)
+SET DEFAULT ROLE 'dataAnalyst' TO 'analyst1'@'localhost';
+----
+
+=== 3. Révocation de droits
+
+[source,sql]
+----
+-- Retrait du droit d'insertion pour le rôle
+REVOKE INSERT ON securite_mysql.logs FROM 'dataAnalyst';
+FLUSH PRIVILEGES;
+----
+
+== Exercice 3 : Journalisation par Déclencheurs (Triggers)
+
+=== 1. Trigger INSERT
+
+[source,sql]
+----
+CREATE TRIGGER trg_acteur_insert
+AFTER INSERT ON acteur
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_acteur_logs (nom_utilisateur, action, anciennes_valeurs, nouvelles_valeurs)
+    VALUES (CURRENT_USER(), 'INSERT', NULL, CONCAT(NEW.NOM, ' ', NEW.PRENOM));
+END;
+----
+
+=== 2. Trigger UPDATE
+
+[source,sql]
+----
+CREATE TRIGGER trg_acteur_update
+AFTER UPDATE ON acteur
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_acteur_logs (nom_utilisateur, action, anciennes_valeurs, nouvelles_valeurs)
+    VALUES (
+        CURRENT_USER(),
+        'UPDATE',
+        CONCAT(OLD.NOM, ' ', OLD.PRENOM),
+        CONCAT(NEW.NOM, ' ', NEW.PRENOM)
+    );
+END;
+----
+
+=== 3. Trigger DELETE
+
+[source,sql]
+----
+CREATE TRIGGER trg_acteur_delete
+AFTER DELETE ON acteur
+FOR EACH ROW
+BEGIN
+    INSERT INTO audit_acteur_logs (nom_utilisateur, action, anciennes_valeurs, nouvelles_valeurs)
+    VALUES (CURRENT_USER(), 'DELETE', CONCAT(OLD.NOM, ' ', OLD.PRENOM), NULL);
+END;
+----
