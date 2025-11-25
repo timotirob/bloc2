@@ -1,0 +1,183 @@
+= Révision : Dépendances Fonctionnelles et Formes Normales (FN)
+:doctype: article
+:encoding: utf-8
+:lang: fr
+:toc: left
+:toc-title: Sommaire
+:allow-uri-read:
+:imagesdir: ./images
+
+== 🎯 Objectifs de la révision
+* Mieux appréhender le niveau de la modélisation relationnelle
+* Comprendre la notion de **Dépendance Fonctionnelle** (DF).
+* Maîtriser les définitions et les critères de la **1ère, 2ème, 3ème Forme Normale** (1NF, 2NF, 3NF).
+* Maîtriser la définition et le critère de la **Forme Normale de Boyce-Codd** (BCNF).
+* Savoir appliquer la normalisation pour obtenir un Modèle Relationnel propre (jusqu'à 3NF/BCNF).
+
+== 💡 Fondements et Terminologie
+Un modèle de données relationnel doit être normalisé pour éliminer la redondance et les anomalies de mise à jour (insertion, modification, suppression).
+
+.Niveaux de modélisation (Conceptuel / Logique / Physique)
+image::NiveauxModélisations.png[Niveaux de modélisation, width=600, align="center"]
+
+=== Définition du modèle relationnel
+
+Un modèle logique de données spécifiant un schéma pour une base de données relationnelle soit : les tables, les champs de chaque table et leurs propriétés, la clé primaire des tables, les clés étrangères assurant les liaisons entre les tables et les contraintes d’intégrité portant sur ces liaisons
+
+Pertinence du modèle relationnel:
+
+* Indépendant du SGBD, tout en étant plus proche des tables
+* Etape de vérification / validation modèle
+* Typage et estimation volumétrie de la base
+* Précisions sur les contraintes, notamment UNIQUE et CHECK
+
+=== Vocabulaire
+
+Le schéma suivant illustre les différents termes utilisés pour des mêmes notions selon le contexte:
+
+.Des termes différents pour la même notion selon le contexte
+image::Vocabulaire.png[Contextes, width=600, align="center"]
+
+=== Dépendance Fonctionnelle (DF)
+Une dépendance fonctionnelle, notée DETERMINANT -> DEPENDANT, signifie que pour toute valeur de l'attribut ou du groupe d'attributs DETERMINANT (le *déterminant*), il existe une seule valeur correspondante pour l'attribut ou le groupe d'attributs DEPENDANT (le *déterminé*).
+
+* *Exemple :* `Numéro Employé` -> `Nom Employé`
+
+==== Depéndance fonctionnelle élémentaire
+
+Une DF (Attribut1, Attribut2) -> DEPENDANT est élémentaire si
+Attribut1 -> DEPENDANT n’est pas DF ET
+Attribut2 -> DEPENDANT n’est pas DF
+
+Permet de détecter les problèmes de 2ème Forme Normale
+
+Exemple (C. SOUTOU): ( num_pilote,jour ) -> nb_heures_vol est élémentaire
+
+==== Depéndance fonctionnelle directe
+
+Une DF DETERMINANT -> DEPENDANT est directe si elle ne peut pas être déduite par transitivité c’est à dire:
+
+- DETERMINANT -> attributX n’est pas DF OU BIEN
+- AttributX -> DEPENDANT n’est pas DF
+
+Permet de détecter les problèmes de 3ème Forme Normale
+
+Exemple (C. SOUTOU): immatriculation aéronef -> nom du constructeur n’est PAS directe car
+immatriculation aéronef -> type avion est DIRECTE ET
+Type avion -> nom constructeur est aussi DIRECTE
+
+
+=== Niveau Logique
+Le niveau logique se rapproche des tables tout en restant indépendant du Système de Gestion de Base de Données (SGBD). C'est à ce niveau que les Formes Normales sont appliquées.
+
+=== Principes de modélisation
+Un modèle de données relationnel doit être normalisé
+La notion de normalisation comporte plusieurs niveaux, appelés formes, que nous allons présenter successivement
+
+Chaque forme normale permet de résoudre des problèmes de modélisation que posent un non respect de ces principes
+
+== 🥇 1ère Forme Normale (1NF)
+
+
+Une relation est en **1NF** si et seulement si:
+
+1. Elle possède au moins une clef
+2. Tous ses attributs sont *atomiques* (indivisibles)
+3. Aucun attribut n'est répété
+
+
+=== Problème typique
+
+La relation ci-dessous est-elle en 1ère forme normale ? Si non, que faut-il faire ?
+
+.Problème de 1ère Forme Normale
+image::PB1NF.png[Contextes, width=600, align="center"]
+
+
+---
+== 🥈 2ème Forme Normale (2NF)
+
+
+Une relation en **1NF** est en **2NF** si et seulement si *tout attribut non-clé est en dépendance fonctionnelle complète vis-à-vis de la clé primaire*.
+
+* *Règle :* Il ne doit y avoir aucune **dépendance fonctionnelle partielle** de la clé primaire vers un attribut non-clé. (Concerne uniquement les relations avec une clé primaire composée).
+
+=== Problème typique (Dépendance partielle)
+
+
+---
+== 🥉 3ème Forme Normale (3NF)
+
+
+Une relation en **2NF** est en **3NF** si et seulement si *aucun attribut non-clé n'est en dépendance fonctionnelle transitive vis-à-vis de la clé primaire*.
+
+* *Règle :* Il ne doit y avoir aucune dépendance d'un attribut non-clé vers un autre attribut non-clé. Si $A \to B$ et $B \to C$ et que $A$ est la clé, alors il y a une **dépendance transitive** $A \to C$ via $B$.
+
+=== Problème typique
+Soit la relation : `VOITURE (NV, MARQUE, TYPE, PUISSANCE, COULEUR)`.
+*Problème :* L'attribut non-clé `TYPE` détermine `MARQUE` et `PUISSANCE`.
+*Solution :* Décomposition en `VOITURE (NV, TYPE, COULEUR)` et `MODELE (TYPE, MARQUE, PUISSANCE)`.
+
+---
+== 👑 Forme Normale de Boyce-Codd (BCNF)
+
+
+Une relation est en **BCNF** si et seulement si elle est en **3NF** *ET* si toute dépendance fonctionnelle non triviale $A \to B$ vérifie que $A$ est une **clé candidate** pour la relation.
+
+* *Règle simplifiée :* Le seul déterminant (partie gauche de la DF) est une clé candidate.
+
+---
+== 📝 Exercices de Modélisation (Solutions)
+
+=== Exercice 1 : Ligne de Commande
+*Relation :* `LigneCommande (Numéro de commande, Numéro de produit, Description, Prix, Quantité)`
+
+1.  **DF :**
+* `(Numéro de commande, Numéro de produit)` $\to$ `Quantité`
+* `Numéro de produit` $\to$ `Description, Prix`
+2.  **Clé :** `(Numéro de commande, Numéro de produit)`
+3.  **Forme Normale :** **1NF**, mais pas en **2NF** (dépendance partielle sur `Numéro de produit`).
+4.  **Critique :** Redondance et anomalies de mise à jour pour les informations Produit.
+
+=== Exercice 2 : Employé
+
+| Relation | Clé | Autres DF | FN Max. | Raison |
+| :--- | :--- | :--- | :--- | :--- |
+| **R1** (Clé simple) | `numéro employé` | Aucune | **3NF** | Clé simple, pas de transitive. |
+| **R2** (Attribut multivalué) | N/A | N/A | **Non normalisé** | N'est pas en 1NF. |
+| **R3** (DF transitive) | `numéro employé` | `Code emploi` $\to$ `libellé emploi` | **2NF** | Dépendance transitive : `NE` $\to$ `CodeE` $\to$ `LibelléE` (Non 3NF). |
+| **R4** (DF partielle) | `(numéro employé, projet)` | `Numéro employé` $\to$ `nom employé` | **1NF** | Dépendance partielle : `NE` $\to$ `NomE` (Non 2NF). |
+
+=== Exercice 3 : Bon de Commande
+
+
+*Objectif :* Modèle relationnel en **3ème forme normale**.
+
+| Relation | Clé Primaire (PK) | Attributs |
+| :--- | :--- | :--- |
+| **CLIENT** | **`Numéro Client`** | `Numéro Client`, `Nom Client`, `Adresse Client` |
+| **COMMANDE** | **`Numéro Commande`** | `Numéro Commande`, `Date Commande`, `Numéro Client` (FK) |
+| **PRODUIT** | **`Numéro Produit`** | `Numéro Produit`, `Description Produit`, `Prix Unitaire` |
+| **LIGNE_COMMANDE** | **`Numéro Commande`, `Numéro Produit`** | `Numéro Commande` (FK), `Numéro Produit` (FK), `Quantité` |
+
+=== Exercice 4 : Groupe Musical
+
+*Hypothèses :* Clé : `(Salle, Année, Groupe)`.
+
+1.  **Extrait 1 :** `(Salle, Année, Groupe, Genre)`
+
+* **DF :** `Groupe` $\to$ `Genre`.
+* **Forme Normale :** **1NF**. **N'est pas en 2NF** (dépendance partielle).
+
+2.  **Extrait 2 :** `(Salle, Année, Groupe, Spectateurs)`
+
+* **DF :** `(Salle, Année, Groupe)` $\to$ `Spectateurs`.
+* **Forme Normale :** **3NF**. (Satisfait 2NF et 3NF).
+
+=== Exercice 5 : Transport Maritime
+*Clé(s) :* $K = \{\text{Bateau, Date arrivée}\}$
+
+* **Modélisation BCNF proposée :**
+* **BATEAU** (`Bateau`, `Type bateau`)
+* **VOYAGE** (`Identifiant voyage`, `Cargaison`)
+* **TRANSPORT** (`Bateau*`, `Date arrivée`, `Identifiant voyage*`, `Port de destination`)
