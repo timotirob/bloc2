@@ -51,7 +51,7 @@ Attribut2 -> DEPENDANT n’est pas DF
 
 Permet de détecter les problèmes de 2ème Forme Normale
 
-Exemple (C. SOUTOU): ( num_pilote,jour ) -> nb_heures_vol est élémentaire
+Exemple (C. SOUTOU: demandez moi les scripts si vous ne les retrouvez pas): `( num_pilote,jour ) -> nb_heures_vol est élémentaire`
 
 ==== Depéndance fonctionnelle directe
 
@@ -93,60 +93,220 @@ La relation ci-dessous est-elle en 1ère forme normale ? Si non, que faut-il fai
 .Problème de 1ère Forme Normale
 image::PB1NF.png[Contextes, width=600, align="center"]
 
+=== Solution au problème de multivaluation
 
----
+La solution consiste à ajouter des relations, c'est à dire des tables.
+Nous obtenons:
+
+* une table Produit
+* une table Couleurs
+* une table d'association Coloris qui permet les combinaisons de produit et de couleur
+
+.Solution au problème de multivaluation
+image::SOL1NF.png[Contextes, width=600, align="center"]
+
+
 == 🥈 2ème Forme Normale (2NF)
 
 
-Une relation en **1NF** est en **2NF** si et seulement si *tout attribut non-clé est en dépendance fonctionnelle complète vis-à-vis de la clé primaire*.
+Une relation en **1NF** est en **2NF** si et seulement si:
+
+*tout attribut non-clé est en dépendance fonctionnelle complète vis-à-vis de la clé primaire*.
+
 
 * *Règle :* Il ne doit y avoir aucune **dépendance fonctionnelle partielle** de la clé primaire vers un attribut non-clé. (Concerne uniquement les relations avec une clé primaire composée).
 
+* Autre rédaction: tout attribut non clef ne dépend pas d’une partie de la clef
+
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 1NF mais N'est PAS en 2NF:
+
+.Relation pas en 2NF
+image::SchemaNon2NF.png[Contextes, width=600, align="center"]
+
 === Problème typique (Dépendance partielle)
 
+Le schéma ci dessous n'est PAS en 2ème forme normale.
 
----
+* Pourquoi ?
+* Quel problème cela pose t'il ?
+
+.Problème de 2ème Forme Normale
+image::PB2NF.png[Contextes, width=600, align="center"]
+
+
+=== Solution au problème de 2ème forme normale
+
+==== Astuce et à se rappeler
+Les problèmes de forme normale concernent TOUJOURS une clef primaire composée (identifiant composé de plusieurs colonnes)
+
+==== Solution
+
+On déplace l'attribut Poids de la table d'association vers le Produit: le poids étant indépendant du Coloris on respecte ainsi la 2NF
+
+.Solution au problème de dépendance partielle
+image::SOL2NF.png[Contextes, width=600, align="center"]
+
 == 🥉 3ème Forme Normale (3NF)
 
 
 Une relation en **2NF** est en **3NF** si et seulement si *aucun attribut non-clé n'est en dépendance fonctionnelle transitive vis-à-vis de la clé primaire*.
 
-* *Règle :* Il ne doit y avoir aucune dépendance d'un attribut non-clé vers un autre attribut non-clé. Si $A \to B$ et $B \to C$ et que $A$ est la clé, alors il y a une **dépendance transitive** $A \to C$ via $B$.
+* *Règle :* Il ne doit y avoir aucune dépendance d'un attribut non-clé vers un autre attribut non-clé.
+
+* 2ème rédaction possible: tout attribut non clef ne dépend pas d’un autre attribut non clef
+
+* 3ème rédaction possible: tout attribut n'appartenant pas à la clé ne dépend pas transitivement de la clé
+
+
+
+Si A -> B et B -> C et que A est la clé, alors il y a une **dépendance transitive** A -> C via B.
+
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 2NF mais N'est PAS en 3NF:
+
+.Relation pas en 3NF
+image::SchemaNon3NF.png[Contextes, width=600, align="center"]
+
+=== Illustration
+
+À titre d'illustration, la relation:
+
+`VOITURE (NV, MARQUE, TYPE, PUISSANCE, COULEUR)`
+
+n'est pas en troisième forme normale.
+
+En effet, l'attribut non-clé TYPE détermine MARQUE et aussi PUISSANCE.
+
+Cette relation peut être décomposée en deux relations:
+
+`VOITURE (NV, TYPE, COULEUR)`
+
+`MODELE (TYPE, MARQUE, PUISSANCE)`.
 
 === Problème typique
-Soit la relation : `VOITURE (NV, MARQUE, TYPE, PUISSANCE, COULEUR)`.
-*Problème :* L'attribut non-clé `TYPE` détermine `MARQUE` et `PUISSANCE`.
-*Solution :* Décomposition en `VOITURE (NV, TYPE, COULEUR)` et `MODELE (TYPE, MARQUE, PUISSANCE)`.
 
----
+Le schéma ci dessous n'est PAS en 3ème forme normale.
+
+* Pourquoi ?
+* Quel problème cela pose t'il ?
+
+.Problème de 3ème Forme Normale
+image::PB3NF.png[Contextes, width=600, align="center"]
+
+
+=== Solution au problème de 3ème forme normale
+
+==== Astuce et à se rappeler
+Les problèmes de forme normale concernent généralement un attribut qui doit être placé dans une autre relation (table) qui est à un niveau plus "agrégé"
+
+==== Solution
+
+On déplace la Marque dans une autre relation (table)
+
+.Solution au problème de dépendance transitive
+image::SOL3NF.png[Contextes, width=600, align="center"]
+
+
 == 👑 Forme Normale de Boyce-Codd (BCNF)
 
 
-Une relation est en **BCNF** si et seulement si elle est en **3NF** *ET* si toute dépendance fonctionnelle non triviale $A \to B$ vérifie que $A$ est une **clé candidate** pour la relation.
+Une relation est en **BCNF** si et seulement si elle est en **3NF** *ET* si toute dépendance fonctionnelle non triviale A -> B vérifie que A est une **clé candidate** pour la relation.
 
-* *Règle simplifiée :* Le seul déterminant (partie gauche de la DF) est une clé candidate.
+* *Règle simplifiée :* Le seul déterminant (partie gauche de la DF) est une clé candidate (aucune dépendance vers une partie de la clef ne doit exister)
 
----
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 3NF mais N'est PAS en BCNF:
+
+.Relation pas en BCNF
+image::SchemaNonBCNF.png[Contextes, width=600, align="center"]
+
+
 == 📝 Exercices de Modélisation (Solutions)
 
-=== Exercice 1 : Ligne de Commande
+=== Exercice 1 : Professions
+
+La relation ci dessous est elle en 1ère forme Normale. Si non, que changer ?
+
+.Profession
+image::Exo1.png[Contextes, width=600, align="center"]
+
+=== Exercice 2 : Fournisseurs
+
+Soit la table suivante:
+
+`Fournisseur( nom, article, adresse, prix)` .
+
+La clef primaire est composée, de  nom et article
+
+1. Quelles sont les dépendances fonctionnelles ?
+
+2. La table Fournisseur est elle en 2ème forme normale ?
+
+3. Si non, quelles corrections effectuer pour être en 2 FN ?
+
+=== Exercice 3 : Vin (Gardarin)
+
+Soit la table, concernant le domaine du vin, suivante:
+
+`Localisation( cru, pays, région, qualité)` .
+
+La clef primaire est composée, de  `cru et pays`
+
+Les DF sont les suivantes:
+
+* `(Cru, pays) -> Région`
+* `(Cru, pays) -> Qualité`   (très franchouillard)
+* `Région -> Pays`
+
+Exemple de cru: Chablis (on en trouve en France dans région Beaujolais et aux USA région Californie)
+
+1. Est elle en BCNF ?
+
+2. Si non, comment faire pour respecter la BCNF ?
+
+=== Exercice 4 :  Recette de cuisine (R. Grin)
+
+On souhaite créer une BDD de recette de cuisine:
+
+* Une recette est identifiée par son numéro.
+* Elle a un nom et un type particulier (soupe, entrée, dessert, ...).
+* Elle utilise un ou plusieurs ingrédients (carottes, viande de boeuf, poivre, ...).
+* Un ingrédient est identifié par son numéro et a un nom.
+* Pour chaque ingrédient dans une recette, on précisera sa quantité.
+
+1. Donner la liste des DF (dépendances fonctionnelles) pour la relation `R = {NumR, NomR,TypeR, NumI, NomI, Qte}`
+2. Proposer une décomposition de R qui respecte les FN
+3. Critiquer la décomposition décomposition suivante:
+
+`R1 = (NumR, NomR,TypeR)`
+
+`R2 = (NumR, NumI, Qte)`
+
+`R3 = (NumI, NomI)`
+
+`R4 = (NumR, Ustensile)`
+
+
+=== Exercice 5 : Ligne de Commande
+
+Une commande est composée de plusieurs lignes de commande avec un produit associé.
+Soit la relation suivante :
+
 *Relation :* `LigneCommande (Numéro de commande, Numéro de produit, Description, Prix, Quantité)`
 
-1.  **DF :**
-* `(Numéro de commande, Numéro de produit)` $\to$ `Quantité`
-* `Numéro de produit` $\to$ `Description, Prix`
-2.  **Clé :** `(Numéro de commande, Numéro de produit)`
-3.  **Forme Normale :** **1NF**, mais pas en **2NF** (dépendance partielle sur `Numéro de produit`).
-4.  **Critique :** Redondance et anomalies de mise à jour pour les informations Produit.
+a.	Donnez les dépendances fonctionnelles (DF) de la relation
+b.	Proposez une clef pour cette relation
+c.	A quelle forme normale se conforme la relation ?
+d.	Critiquez
 
-=== Exercice 2 : Employé
 
-| Relation | Clé | Autres DF | FN Max. | Raison |
-| :--- | :--- | :--- | :--- | :--- |
-| **R1** (Clé simple) | `numéro employé` | Aucune | **3NF** | Clé simple, pas de transitive. |
-| **R2** (Attribut multivalué) | N/A | N/A | **Non normalisé** | N'est pas en 1NF. |
-| **R3** (DF transitive) | `numéro employé` | `Code emploi` $\to$ `libellé emploi` | **2NF** | Dépendance transitive : `NE` $\to$ `CodeE` $\to$ `LibelléE` (Non 3NF). |
-| **R4** (DF partielle) | `(numéro employé, projet)` | `Numéro employé` $\to$ `nom employé` | **1NF** | Dépendance partielle : `NE` $\to$ `NomE` (Non 2NF). |
+=== Exercice 6 : Employé
+
+
 
 === Exercice 3 : Bon de Commande
 
