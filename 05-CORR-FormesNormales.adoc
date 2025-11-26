@@ -112,21 +112,6 @@ Cette relation est en
 === Exercice 5 : Bon de Commande
 
 
-A Sample Answer
-•	0NF
-o	ORDER(order#, customer#, name, address, orderdate(product#, description, quantity, unitprice))
-•	1NF
-o	ORDER(order#, customer#, name, address, orderdate)
-o	ORDER_LINE(order#, product#, description, quantity, unitprice)
-•	2NF
-o	ORDER(order#, customer#, name, address, orderdate)
-o	ORDER_LINE(order#, product#, quantity)
-o	PRODUCT(product#, description, unitprice)
-•	3NF
-o	ORDER(order#, customer#, orderdate)
-o	CUSTOMER(customer#, name, address)
-o	ORDER_LINE(order#, product#, quantity)
-o	PRODUCT(product#, description, unitprice)
 
 
 
@@ -143,7 +128,12 @@ o	PRODUCT(product#, description, unitprice)
 
 === Exercice 7 : Bon de Commande
 
-*Objectif :* Produire le modèle relationnel correspondant en **3ème forme normale**.
+Soit le document suivant qui représente un bon de commande. Produisez le modèle relationnel correspondant en **3ème forme normale**
+
+.Bon de commande
+image::ExoBonCommande.png[Bon commande, width=600, align="center"]
+
+
 
 .Modèle Relationnel en 3NF (Exercice 7)
 [cols="3,3,4", options="header"]
