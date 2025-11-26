@@ -1,4 +1,11 @@
-
+= Correction Dépendances Fonctionnelles et Formes Normales (FN)
+:doctype: article
+:encoding: utf-8
+:lang: fr
+:toc: left
+:toc-title: Sommaire
+:allow-uri-read:
+:imagesdir: ./images
 == 📝 Solutions Détaillées des Exercices
 
 Les solutions ci-dessous suivent une méthode de décomposition pour atteindre la Forme Normale maximale, en justifiant chaque étape.
@@ -111,7 +118,11 @@ Cette relation est en
 
 === Exercice 5 : Bon de Commande
 
+[.underline]#Relation# : `LigneCommande (Numéro de commande, Numéro de produit, Description, Prix, Quantité)`.
 
+* **FN Max.: 1NF.**
+* **Non 2NF**.
+* **Critique :** Redondance de `Description` et `Prix` pour chaque ligne de commande, risque d'anomalie de mise à jour.
 
 
 
