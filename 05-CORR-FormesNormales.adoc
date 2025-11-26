@@ -1,0 +1,226 @@
+
+== 📝 Solutions Détaillées des Exercices
+
+Les solutions ci-dessous suivent une méthode de décomposition pour atteindre la Forme Normale maximale, en justifiant chaque étape.
+
+=== Exercice 1 : Professions
+
+* [cite_start]**Problème :** La relation contient un attribut *multivalué* ou *répété*.
+* **FN Max. :** **Non normalisé** (Violation de la 1NF).
+* **Correction (1NF) :** La solution consiste à créer une table d'association pour gérer la relation plusieurs-à-plusieurs entre l'employé et la profession.
+
+.Décomposition en 1NF
+[cols="3,7", options="header"]
+|===
+| Relation | Clé Primaire (PK)
+| EMPLOYE | `*ID_Employe*`
+| PROFESSION | `*Code_Profession*`
+| EMPLOYE_PROFESSION | `*ID_Employe, Code_Profession*`
+|===
+
+
+=== Exercice 2 : Fournisseurs
+
+*Relation :* `Fournisseur( nom, article, adresse, prix)`.
+
+* **PK :** `(nom, article)`.
+
+* **Dépendances Fonctionnelles (DF) :**
+- (F1) `(nom, article) -> prix`
+- (F2) `nom -> adresse`
+
+**FN Max.: 1NF.**
+
+**Non 2NF**.
+
+* **Justification :** L'attribut non-clé `adresse` dépend seulement d'une **partie de la clé** (`nom`) (F2).
+
+.Corrections pour la 2ème Forme Normale (2NF)
+[cols="3,3,4", options="header"]
+|===
+| Relation | Clé Primaire (PK) | Attributs
+| **FOURNISSEUR** | `*nom*` | `nom`, `adresse`
+| **TARIF** | `*nom, article*` | `nom`, `article`, `prix`
+|===
+
+---
+
+=== Exercice 3 : Vin (Gardarin)
+
+[.underline]#Relation# :
+
+* `Localisation( cru, pays, région, qualité)`.
+* **PK :** `(cru, pays)`.
+* **DFs :** `Région -> Pays`.
+
+**FN Max. : 3NF.**
+
+**Non BCNF**.
+
+* **Justification BCNF :** La DF `Région -> Pays` a pour déterminant `Région`, qui n'est pas une clé candidate (ne détermine pas `cru` ou `qualité`).
+* **Correction (BCNF) :** Isoler la dépendance où le déterminant n'est pas une clé.
+
+.Décomposition en BCNF
+[cols="3,3,4", options="header"]
+|===
+| Relation | Clé Primaire (PK) | Attributs
+| **CRU** | `*cru, région*` | `cru`, `région`, `qualité`
+| **PAYS_REGION** | `*région*` | `région`, `pays`
+|===
+
+Justification :
+
+* La table `PAYS_REGION` isole la DF `Région -> Pays`
+* La table CRU maintient les autres informations. La clé devient `(cru, région)` car l'attribut `pays` a été retiré (il est déterminé par région).
+* L'attribut `qualité` est un attribut non-clé dans `CRU`.
+
+---
+
+=== Exercice 4 : Recette de cuisine (R. Grin)
+
+[.underline]#Relation# : `R = {NumR, NomR, TypeR, NumI, NomI, Qte}`.
+
+**PK :** `(NumR, NumI)`.
+
+**Liste des DF :**
+
+* (F1) `NumR -> NomR, TypeR`
+* (F2) `NumI -> NomI`
+* (F3) `NumR, NumI -> Qte`
+
+**Décomposition (3NF) :**
+Cette relation est en
+
+* **1NF** mais
+* viole la **2NF** (par F1 et F2).
+
+.Décomposition en 3NF  : Recette de Cuisine
+[cols="3,3,4", options="header"]
+|===
+| Relation | Clé Primaire (PK) | Attributs
+| **RECETTE** | `*NumR*` | `NumR`, `NomR`, `TypeR`
+| **INGREDIENT** | `*NumI*` | `NumI`, `NomI`
+| **COMPOSITION** | `*NumR, NumI*` | `NumR` (FK), `NumI` (FK), `Qte`
+|===
+
+**Critique de la Décomposition Proposée** :
+
+* `R4 = (NumR, Ustensile)` est **non pertinent** car l'entité `Ustensile` n'est pas justifiée par les dépendances fonctionnelles initiales .
+
+---
+
+=== Exercice 5 : Bon de Commande
+
+
+A Sample Answer
+•	0NF
+o	ORDER(order#, customer#, name, address, orderdate(product#, description, quantity, unitprice))
+•	1NF
+o	ORDER(order#, customer#, name, address, orderdate)
+o	ORDER_LINE(order#, product#, description, quantity, unitprice)
+•	2NF
+o	ORDER(order#, customer#, name, address, orderdate)
+o	ORDER_LINE(order#, product#, quantity)
+o	PRODUCT(product#, description, unitprice)
+•	3NF
+o	ORDER(order#, customer#, orderdate)
+o	CUSTOMER(customer#, name, address)
+o	ORDER_LINE(order#, product#, quantity)
+o	PRODUCT(product#, description, unitprice)
+
+
+
+=== Exercice 6 : Employé
+.Exercice 6 (Employé)
+[cols="2,2,2,2,4", options="header"]
+|===
+| Relation | Clé | Autres DF | FN Max. | Raison
+| **R1** (Clé simple) | `numéro employé` | Aucune | **3NF** | Clé simple, pas de transitive.
+| **R2** (Attribut multivalué) | N/A | N/A | **Non normalisé** | N'est pas en 1NF.
+| **R3** (DF transitive) | `numéro employé` | `Code emploi` -> `libellé emploi` | **2NF** | Dépendance transitive : `NE` -> `CodeE` -> `LibelléE` (Non 3NF).
+| **R4** (DF partielle) | `(numéro employé, projet)` | `Numéro employé` -> `nom employé` | **1NF** | Dépendance partielle : `NE` -> `NomE` (Non 2NF).
+|===
+
+=== Exercice 7 : Bon de Commande
+
+*Objectif :* Produire le modèle relationnel correspondant en **3ème forme normale**.
+
+.Modèle Relationnel en 3NF (Exercice 7)
+[cols="3,3,4", options="header"]
+|===
+| Relation | Clé Primaire (PK) | Attributs
+| **CLIENT** | `*Numéro Client*` | `Numéro Client`, `Nom Client`, `Adresse Client`
+| **COMMANDE** | `*Numéro Commande*` | `Numéro Commande`, `Date Commande`, `Numéro Client` (FK)
+| **PRODUIT** | `*Numéro Produit*` | `Numéro Produit`, `Description Produit`, `Prix Unitaire`
+| **LIGNE_COMMANDE** | `*Numéro Commande, Numéro Produit*` | `Numéro Commande` (FK), `Numéro Produit` (FK), `Quantité`
+|===
+
+=== Exercice 8 : Groupe Musical
+
+**Hypothèse PK :** `(Salle, Année, Groupe)`.
+
+1.  **Extrait 1 :** `(Salle, Année, Groupe, Genre)`
+* **DF :** `Groupe -> Genre`.
+* **FN : Non 2NF**. (Dépendance partielle).
+2.  [cite_start]**Extrait 2 :** `(Salle, Année, Groupe, Spectateurs)`.
+* **FN : 3NF**. (Satisfait 2NF et 3NF).
+
+---
+
+=== Exercice 9 : Transport Maritime
+
+**Clés Possibles :** `K = {Bateau, Date arrivée}`
+
+* **FN Max. : 3NF.**
+* **Non BCNF**.
+
+**Modélisation BCNF :** Isoler les déterminants non-clés (`Bateau` et `Identifiant voyage`).
+
+.Décomposition BCNF (Exercice 9)
+[cols="3,3,4", options="header"]
+|===
+| Relation BCNF | Clé Primaire (PK) | Attributs
+| **BATEAU** | `*Bateau*` | `Bateau`, `type bateau`
+| **VOYAGE** | `*Identifiant voyage*` | `Identifiant voyage`, `bateau`, `cargaison`
+| **TRANSPORT** | `*Bateau, date arrivée*` | `Bateau` (FK), `date arrivée`, `identifiant voyage` (FK), `port de destination`
+|===
+
+
+=== Exercice 10 : Gestion des Postes Informatiques (focus 3NF)
+
+**PK :** `NumSérie`.
+
+**FN Max.**:
+
+* 2NF.
+* **Non 3NF**.
+
+* Justification : ** Dépendance transitive** `NumSérie -> CodeService -> (NomService, NomChef)`
+
+.Modèle Relationnel 3NF
+[cols="3,3,4", options="header"]
+|===
+| Relation | Clé Primaire (PK) | Attributs
+| **POSTE** | `*NumSérie*` | `NumSérie`, `ID_Utilisateur` (FK), `CodeService` (FK)
+| **SERVICE** | `*CodeService*` | `CodeService`, `NomService`, `NomChef`
+| **UTILISATEUR** | `*ID_Utilisateur*` | `ID_Utilisateur`, `NomUtilisateur`
+|===
+
+=== Exercice 11 : Gestion des Inscriptions aux Modules (focus BCNF)
+
+
+**PK :** `(ID_Participant, CodeModule)`.
+
+* **FN Max.: 3NF.**
+* **Non BCNF**.
+* **Justification :** La `DF CodeModule -> NomFormateur (F3)` a un déterminant `CodeModule` qui n'est pas une clé candidate (violation BCNF).
+
+.Modèle Relationnel BCNF
+[cols="3,3,4", options="header"]
+|===
+| Relation BCNF | Clé Primaire (PK) | Attributs
+| **FORMATEUR_SPECIALITE** | `*NomFormateur*` | `NomFormateur`, `Spécialité`
+| **MODULE** | `*CodeModule*` | `CodeModule`, `NomFormateur` (FK)
+| **INSCRIPTION** | `*ID_Participant, CodeModule*` | `ID_Participant` (FK), `CodeModule` (FK), `DateInscription`
+|===
+
