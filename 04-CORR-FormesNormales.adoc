@@ -1,0 +1,10 @@
+
+.Exercice 6 (Employé)
+[cols="2,2,2,2,4", options="header"]
+|===
+| Relation | Clé | Autres DF | FN Max. | Raison
+| **R1** (Clé simple) | `numéro employé` | Aucune | **3NF** | Clé simple, pas de transitive.
+| **R2** (Attribut multivalué) | N/A | N/A | **Non normalisé** | N'est pas en 1NF.
+| **R3** (DF transitive) | `numéro employé` | `Code emploi` -> `libellé emploi` | **2NF** | Dépendance transitive : `NE` -> `CodeE` -> `LibelléE` (Non 3NF).
+| **R4** (DF partielle) | `(numéro employé, projet)` | `Numéro employé` -> `nom employé` | **1NF** | Dépendance partielle : `NE` -> `NomE` (Non 2NF).
+|===
