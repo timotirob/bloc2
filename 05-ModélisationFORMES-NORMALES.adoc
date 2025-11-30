@@ -560,9 +560,9 @@ class Commande {
     + NomFournisseur       // Problème 2 : redondance / DF transitive
 }
 
-Commande "1" --> "N" LigneCommande : contient
+Commande "1" --> "*" LigneCommande : contient
 
-Fournisseur "1" <-- "N" Commande : passe
+Fournisseur "1" <-- "*" Commande : passe
 ----
 
 === 3. Questions d'Analyse (Justification par les Formes Normales)
