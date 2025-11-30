@@ -516,3 +516,64 @@ Une association de formation gère les inscriptions aux modules.
 3. Décomposez la relation en un modèle relationnel qui respecte la Forme Normale de Boyce-Codd (BCNF).
 
 (Point clé : La dépendance `CodeModule -> NomFormateur` est une dépendance entre un non-clé (CodeModule est non-clé dans la clé principale) et un autre non-clé (NomFormateur), ce qui est une violation de BCNF. Il faut extraire l'entité MODULE et l'entité FORMATEUR)
+
+== 🧑‍💻 Exercice Type Étude de Cas : Normalisation UML (2NF et 3NF)
+
+Cet exercice vise à appliquer les règles de normalisation pour justifier les modifications apportées à un modèle de classes UML initial.
+
+L'objectif est de passer d'un modèle fautif à un Modèle de Classes sain qui respecte la 3ème Forme Normale.
+
+=== 1. Contexte : Gestion des Commandes Fournisseurs
+
+Une entreprise gère ses achats. Une **Commande** est passée à un **Fournisseur** et contient plusieurs **Lignes de Commande** pour divers **Articles**.
+
+=== 2. Diagramme de Classes UML Initial
+
+Le modèle UML initial est présenté ci-dessous. Notez que certains attributs sont placés dans des classes inappropriées, créant des anomalies :
+
+[plantuml, uml-fautif, svg]
+----
+skinparam ClassAttributeIconSize 0
+
+class Fournisseur {
+    + idFournisseur (PK)
+    -- Informations Fournisseur --
+    + nom
+    + categorie
+    + RemiseMax
+}
+
+class LigneCommande {
+    + idCommande (PK, FK vers Commande)
+    + noLigne (PK)
+    + codeArticle (FK vers Article)
+    -- Détails de la ligne --
+    + Quantite
+    + PrixUnitaire           // Problème 1 : dépend de codeArticle (partie de la clé)
+    + NomCategorieArticle  // Problème 1 : dépend de codeArticle
+    + NomFournisseur       // Problème 2 : redondance
+}
+
+class Commande {
+    + idCommande (PK)
+    + DateCommande
+    + NomFournisseur       // Problème 2 : redondance / DF transitive
+}
+
+Commande "1" --> "N" LigneCommande : contient
+
+Fournisseur "1" <-- "N" Commande : passe
+----
+
+=== 3. Questions d'Analyse (Justification par les Formes Normales)
+
+1.  **Violation de la 2NF :** Dans la classe `LigneCommande`, la clé primaire est composite : {`idCommande`, `noLigne`}. Cependant, les attributs `PrixUnitaire` et `NomCategorieArticle` dépendent uniquement de l'attribut `codeArticle`, qui n'est qu'une **partie de la clé**.
+* Quelle **règle des Formes Normales** est violée par cette situation ?
+* Quelle nouvelle **classe UML** doit être créée pour isoler ces attributs et résoudre la violation, et quelle sera sa clé primaire ?
+
+2.  **Violation de la 3NF :** Dans la classe `Commande`, l'attribut `NomFournisseur` est stocké, bien que la commande soit déjà liée au `Fournisseur` via une association. Ce nom est également stocké dans la classe `Fournisseur`.
+* Expliquez pourquoi cette redondance viole la **3ème Forme Normale (3NF)** et comment cela se traduit en termes d'anomalies (insertion, suppression, modification).
+* Quelle est la modification à apporter à la classe `Commande` pour respecter la 3NF ?
+
+3.  **Modèle Final Normalisé :** En intégrant les modifications justifiées par la 2NF et la 3NF, proposez le **Diagramme de Classes UML final** (en PlantUML).
+
