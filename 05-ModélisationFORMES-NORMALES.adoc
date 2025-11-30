@@ -531,8 +531,11 @@ Une entreprise gère ses achats. Une **Commande** est passée à un **Fournisseu
 
 Le modèle UML initial est présenté ci-dessous. Notez que certains attributs sont placés dans des classes inappropriées, créant des anomalies :
 
+.Diagramme de Classes UML Final
+image::Exo11.png[Fautif]
 [plantuml, uml-fautif, svg]
 ----
+@startuml
 skinparam ClassAttributeIconSize 0
 
 class Fournisseur {
@@ -563,6 +566,7 @@ class Commande {
 Commande "1" --> "*" LigneCommande : contient
 
 Fournisseur "1" <-- "*" Commande : passe
+@enduml
 ----
 
 === 3. Questions d'Analyse (Justification par les Formes Normales)
