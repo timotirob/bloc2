@@ -225,3 +225,562 @@ image::ExoBonCommande.png[Bon commande, width=600, align="center"]
 | **INSCRIPTION** | `*ID_Participant, CodeModule*` | `ID_Participant` (FK), `CodeModule` (FK), `DateInscription`
 |===
 
+= Révision : Dépendances Fonctionnelles et Formes Normales (FN)
+:doctype: article
+:encoding: utf-8
+:lang: fr
+:toc: left
+:toc-title: Sommaire
+:allow-uri-read:
+:imagesdir: ./images
+
+== 🎯 Objectifs de la révision
+* Mieux appréhender le niveau de la modélisation relationnelle
+* Comprendre la notion de **Dépendance Fonctionnelle** (DF).
+* Maîtriser les définitions et les critères de la **1ère, 2ème, 3ème Forme Normale** (1NF, 2NF, 3NF).
+* Maîtriser la définition et le critère de la **Forme Normale de Boyce-Codd** (BCNF).
+* Savoir appliquer la normalisation pour obtenir un Modèle Relationnel propre (jusqu'à 3NF/BCNF).
+
+== 💡 Fondements et Terminologie
+Un modèle de données relationnel doit être normalisé pour éliminer la redondance et les anomalies de mise à jour (insertion, modification, suppression).
+
+.Niveaux de modélisation (Conceptuel / Logique / Physique)
+image::NiveauxModélisations.png[Niveaux de modélisation, width=600, align="center"]
+
+=== Définition du modèle relationnel
+
+Un modèle logique de données spécifiant un schéma pour une base de données relationnelle soit : les tables, les champs de chaque table et leurs propriétés, la clé primaire des tables, les clés étrangères assurant les liaisons entre les tables et les contraintes d’intégrité portant sur ces liaisons
+
+Pertinence du modèle relationnel:
+
+* Indépendant du SGBD, tout en étant plus proche des tables
+* Etape de vérification / validation modèle
+* Typage et estimation volumétrie de la base
+* Précisions sur les contraintes, notamment UNIQUE et CHECK
+
+=== Vocabulaire
+
+Le schéma suivant illustre les différents termes utilisés pour des mêmes notions selon le contexte:
+
+.Des termes différents pour la même notion selon le contexte
+image::Vocabulaire.png[Contextes, width=600, align="center"]
+
+=== Dépendance Fonctionnelle (DF)
+Une dépendance fonctionnelle, notée DETERMINANT -> DEPENDANT, signifie que pour toute valeur de l'attribut ou du groupe d'attributs DETERMINANT (le *déterminant*), il existe une seule valeur correspondante pour l'attribut ou le groupe d'attributs DEPENDANT (le *déterminé*).
+
+* *Exemple :* `Numéro Employé` -> `Nom Employé`
+
+
+=== Définition : Clé Candidate et Clé Primaire
+Une **Clé Candidate (CC)** est un ensemble minimal d'attributs qui détermine tous les autres attributs de la relation.
+
+* *Minimal :* Si on enlève n'importe quel attribut de la clé candidate, celle-ci n'est plus une clé.
+* La **Clé Primaire (PK)** est la Clé Candidate que le concepteur choisit pour identifier les enregistrements.
+
+==== Depéndance fonctionnelle élémentaire
+
+Une DF (Attribut1, Attribut2) -> DEPENDANT est élémentaire si
+Attribut1 -> DEPENDANT n’est pas DF ET
+Attribut2 -> DEPENDANT n’est pas DF
+
+Permet de détecter les problèmes de 2ème Forme Normale
+
+Exemple (C. SOUTOU: demandez moi les scripts si vous ne les retrouvez pas): `( num_pilote,jour ) -> nb_heures_vol est élémentaire`
+
+==== Depéndance fonctionnelle directe
+
+Une DF DETERMINANT -> DEPENDANT est directe si elle ne peut pas être déduite par transitivité c’est à dire:
+
+- DETERMINANT -> attributX n’est pas DF OU BIEN
+- AttributX -> DEPENDANT n’est pas DF
+
+Permet de détecter les problèmes de 3ème Forme Normale
+
+Exemple (C. SOUTOU): immatriculation aéronef -> nom du constructeur n’est PAS directe car
+immatriculation aéronef -> type avion est DIRECTE ET
+Type avion -> nom constructeur est aussi DIRECTE
+
+
+=== Niveau Logique
+Le niveau logique se rapproche des tables tout en restant indépendant du Système de Gestion de Base de Données (SGBD). C'est à ce niveau que les Formes Normales sont appliquées.
+
+=== Principes de modélisation
+Un modèle de données relationnel doit être normalisé
+La notion de normalisation comporte plusieurs niveaux, appelés formes, que nous allons présenter successivement
+
+Chaque forme normale permet de résoudre des problèmes de modélisation que posent un non respect de ces principes
+
+== 🥇 1ère Forme Normale (1NF)
+
+
+Une relation est en **1NF** si et seulement si:
+
+1. Elle possède au moins une clef
+2. Tous ses attributs sont *atomiques* (indivisibles)
+3. Aucun attribut n'est répété
+
+
+=== Problème typique
+
+La relation ci-dessous est-elle en 1ère forme normale ? Si non, que faut-il faire ?
+
+.Problème de 1ère Forme Normale
+image::PB1NF.png[Contextes, width=600, align="center"]
+
+=== Solution au problème de multivaluation
+
+La solution consiste à ajouter des relations, c'est à dire des tables.
+Nous obtenons:
+
+* une table Produit
+* une table Couleurs
+* une table d'association Coloris qui permet les combinaisons de produit et de couleur
+
+.Solution au problème de multivaluation
+image::SOL1NF.png[Contextes, width=600, align="center"]
+
+
+== 🥈 2ème Forme Normale (2NF)
+
+
+Une relation en **1NF** est en **2NF** si et seulement si:
+
+*tout attribut non-clé est en dépendance fonctionnelle complète vis-à-vis de la clé primaire*.
+
+
+* *Règle :* Il ne doit y avoir aucune **dépendance fonctionnelle partielle** de la clé primaire vers un attribut non-clé. (Concerne uniquement les relations avec une clé primaire composée).
+
+* Autre rédaction: tout attribut non clef ne dépend pas d’une partie de la clef
+
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 1NF mais N'est PAS en 2NF:
+
+.Relation pas en 2NF
+image::SchemaNon2NF.png[Contextes, width=600, align="center"]
+
+=== Problème typique (Dépendance partielle)
+
+Le schéma ci dessous n'est PAS en 2ème forme normale.
+
+* Pourquoi ?
+* Quel problème cela pose t'il ?
+
+.Problème de 2ème Forme Normale
+image::PB2NF.png[Contextes, width=600, align="center"]
+
+
+=== Solution au problème de 2ème forme normale
+
+==== Astuce et à se rappeler
+Les problèmes de forme normale concernent TOUJOURS une clef primaire composée (identifiant composé de plusieurs colonnes)
+
+==== Solution
+
+On déplace l'attribut Poids de la table d'association vers le Produit: le poids étant indépendant du Coloris on respecte ainsi la 2NF
+
+.Solution au problème de dépendance partielle
+image::SOL2NF.png[Contextes, width=600, align="center"]
+
+== 🥉 3ème Forme Normale (3NF)
+
+
+Une relation en **2NF** est en **3NF** si et seulement si *aucun attribut non-clé n'est en dépendance fonctionnelle transitive vis-à-vis de la clé primaire*.
+
+* *Règle :* Il ne doit y avoir aucune dépendance d'un attribut non-clé vers un autre attribut non-clé.
+
+* 2ème rédaction possible: tout attribut non clef ne dépend pas d’un autre attribut non clef
+
+* 3ème rédaction possible: tout attribut n'appartenant pas à la clé ne dépend pas transitivement de la clé
+
+Si A -> B et B -> C et que A est la clé, alors il y a une **dépendance transitive** A -> C via B.
+
+NOTE: La dépendance transitive (A -> B -> C) est directement liée à l'**Axiome de Transitivité d'Armstrong**. C'est le moyen théorique d'expliquer pourquoi, si la clé A détermine un attribut non-clé B, et que B détermine un autre non-clé C, la connaissance de A suffit à déterminer C via B, créant la redondance et violant la 3NF.
+
+
+
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 2NF mais N'est PAS en 3NF:
+
+.Relation pas en 3NF
+image::SchemaNon3NF.png[Contextes, width=600, align="center"]
+
+=== Illustration
+
+À titre d'illustration, la relation:
+
+`VOITURE (NV, MARQUE, TYPE, PUISSANCE, COULEUR)`
+
+n'est pas en troisième forme normale.
+
+En effet, l'attribut non-clé TYPE détermine MARQUE et aussi PUISSANCE.
+
+Cette relation peut être décomposée en deux relations:
+
+`VOITURE (NV, TYPE, COULEUR)`
+
+`MODELE (TYPE, MARQUE, PUISSANCE)`.
+
+=== Problème typique
+
+Le schéma ci dessous n'est PAS en 3ème forme normale.
+
+* Pourquoi ?
+* Quel problème cela pose t'il ?
+
+.Problème de 3ème Forme Normale
+image::PB3NF.png[Contextes, width=600, align="center"]
+
+
+=== Solution au problème de 3ème forme normale
+
+==== Astuce et à se rappeler
+Les problèmes de forme normale concernent généralement un attribut qui doit être placé dans une autre relation (table) qui est à un niveau plus "agrégé"
+
+==== Solution
+
+On déplace la Marque dans une autre relation (table)
+
+.Solution au problème de dépendance transitive
+image::SOL3NF.png[Contextes, width=600, align="center"]
+
+
+== 👑 Forme Normale de Boyce-Codd (BCNF)
+
+
+Une relation est en **BCNF** si et seulement si elle est en **3NF** *ET* si toute dépendance fonctionnelle non triviale A -> B vérifie que A est une **clé candidate** pour la relation.
+
+* *Règle simplifiée :* Le seul déterminant (partie gauche de la DF) est une clé candidate (aucune dépendance vers une partie de la clef ne doit exister)
+
+=== Schéma contre exemple
+
+Le schéma ci dessous montre une relation (table) qui est en 3NF mais N'est PAS en BCNF:
+
+.Relation pas en BCNF
+image::SchemaNonBCNF.png[Contextes, width=600, align="center"]
+
+
+=== Cas spécial : 3NF vs BCNF
+Une relation est en 3NF, mais pas en BCNF, lorsque l'on a une DF non triviale A -> B où A est un déterminant non-clé, *mais* A fait partie d'une clé candidate.
+
+==== Définition du Contexte et des Contraintes
+
+Ceci est le cas le plus difficile : la relation ne contient **aucun attribut non-clé**, ce qui satisfait *trivialement* la 3ème Forme Normale, mais elle est décomposable car un déterminant n'est pas une clé candidate.
+
+==== Relation Initiale
+Nous gérons les aides-correcteurs rattachés aux cours et aux étudiants.
+
+`R = EXAMEN ([.underline]#ÉtudiantID#, CoursID, AideCorrecteur)`
+
+==== Dépendances Fonctionnelles (DF)
+
+.Tableau de l'Exercice : Dépendances Fonctionnelles (DF)
+[cols="3,6,3", options="header"]
+|===
+| DF | Justification | Déterminant
+| (F1) `ÉtudiantID, CoursID` -> `AideCorrecteur` | La paire Étudiant/Cours a un seul Aide-Correcteur. | {ÉtudiantID, CoursID}
+| (F2) `AideCorrecteur` -> `CoursID` | Un Aide-Correcteur ne s'occupe que d'un seul cours (Spécialisation). | {AideCorrecteur}
+| (F3) `ÉtudiantID, AideCorrecteur` -> `CoursID` | Un étudiant, pour un Aide-Correcteur donné, n'est inscrit qu'à un seul cours (Dérivé de F1 et F2). | {ÉtudiantID, AideCorrecteur}
+|===
+
+==== Clés Candidates (CC)
+
+.Tableau : Clés Candidates (CC) de la Relation EXAMEN
+[cols="5,5", options="header"]
+|===
+| Clé Candidate | Justification
+| `K_1 = {ÉtudiantID, CoursID}` | Détermine tous les attributs (via F1).
+| `K_2 = {ÉtudiantID, AideCorrecteur}` | Détermine tous les attributs (via F2 et F3).
+|===
+
+==== Analyse des Formes Normales
+
+===== Verdict 3NF
+* **Attributs Non-Clés :** Aucun. Tous les attributs font partie d'au moins une Clé Candidate.
+* **Conclusion 3NF :** La règle 3NF (qui ne s'applique qu'aux Attributs Non-Clés) est **RESPECTÉE** par défaut.
+
+===== Verdict BCNF
+La règle BCNF est violée si un déterminant A n'est **PAS** une Clé Candidate (CC).
+
+* **DF Violatrice :** (F2) `AideCorrecteur` -> `CoursID`
+* **Déterminant :** `AideCorrecteur`
+* **Est-ce une CC ?** Non. (`AideCorrecteur` ne détermine pas `ÉtudiantID`).
+* **Conclusion BCNF :** La relation est **NON BCNF**.
+
+**Le Problème :** L'information de spécialisation de l'aide-correcteur (F2) est stockée de manière redondante dans chaque enregistrement d'étudiant.
+
+==== Décomposition en BCNF
+
+Nous décomposons en isolant la DF problématique (F2) du reste de la relation.
+
+.Décomposition Finale en BCNF
+[cols="3,3,4", options="header"]
+|===
+| Relation BCNF | Clé Primaire (PK) | Attributs
+| **AIDE_COURS** | `_AideCorrecteur_` | `AideCorrecteur`, `CoursID`
+| **INSCRIPTION_ETUDIANT** | `_ÉtudiantID, AideCorrecteur_` | `ÉtudiantID`, `AideCorrecteur` (FK)
+|===
+
+.Détail de la violation de BCNF
+[cols="3,3", options="header"]
+|===
+| Déterminant problématique | Règle BCNF violée
+| {AideCorrecteur}  | Le déterminant {AideCorrecteur} n'est pas une clé candidate et détermine un autre attribut.
+|===
+
+== 📝 Exercices de Modélisation
+=== Méthodologie
+Pour les exercices de normalisation on utilise une **méthodologie de décomposition**.
+
+Cette décomposition doit garantir deux propriétés essentielles :
+
+1. **Décomposition sans perte d'information** (Lossless Join Decomposition) : La jointure des relations décomposées doit redonner la relation initiale (ce qui est toujours le cas si on inclut la clé de la DF extraite).
+
+2. **Préservation des dépendances** (Dependency Preservation) : Toutes les DF de la relation originale doivent être préservées dans les nouvelles relations (ou par composition).
+
+=== Exercice 1 : Professions
+
+La relation ci dessous est elle en 1ère forme Normale. Si non, que changer ?
+
+.Profession
+image::Exo1.png[Contextes, width=600, align="center"]
+
+=== Exercice 2 : Fournisseurs
+
+Soit la table suivante:
+
+`Fournisseur( nom, article, adresse, prix)` .
+
+La clef primaire est composée, de  nom et article
+
+1. Quelles sont les dépendances fonctionnelles ?
+
+2. La table Fournisseur est elle en 2ème forme normale ?
+
+3. Si non, quelles corrections effectuer pour être en 2 FN ?
+
+=== Exercice 3 : Vin (Gardarin)
+
+Soit la table, concernant le domaine du vin, suivante:
+
+`Localisation( cru, pays, région, qualité)` .
+
+La clef primaire est composée, de  `cru et pays`
+
+Les DF sont les suivantes:
+
+* `(Cru, pays) -> Région`
+* `(Cru, pays) -> Qualité`   (très franchouillard)
+* `Région -> Pays`
+
+Exemple de cru: Chablis (on en trouve en France dans région Beaujolais et aux USA région Californie)
+
+1. Est elle en BCNF ?
+
+2. Si non, comment faire pour respecter la BCNF ?
+
+=== Exercice 4 :  Recette de cuisine (R. Grin)
+
+On souhaite créer une BDD de recette de cuisine:
+
+* Une recette est identifiée par son numéro.
+* Elle a un nom et un type particulier (soupe, entrée, dessert, ...).
+* Elle utilise un ou plusieurs ingrédients (carottes, viande de boeuf, poivre, ...).
+* Un ingrédient est identifié par son numéro et a un nom.
+* Pour chaque ingrédient dans une recette, on précisera sa quantité.
+
+1. Donner la liste des DF (dépendances fonctionnelles) pour la relation `R = {NumR, NomR,TypeR, NumI, NomI, Qte}`
+2. Proposer une décomposition de R qui respecte les FN
+3. Critiquer la décomposition décomposition suivante:
+
+`R1 = (NumR, NomR,TypeR)`
+
+`R2 = (NumR, NumI, Qte)`
+
+`R3 = (NumI, NomI)`
+
+`R4 = (NumR, Ustensile)`
+
+
+=== Exercice 5 : Ligne de Commande
+
+Une commande est composée de plusieurs lignes de commande avec un produit associé.
+Soit la relation suivante :
+
+*Relation :* `LigneCommande (Numéro de commande, Numéro de produit, Description, Prix, Quantité)`
+
+a.	Donnez les dépendances fonctionnelles (DF) de la relation
+b.	Proposez une clef pour cette relation
+c.	A quelle forme normale se conforme la relation ?
+d.	Critiquez
+
+
+=== Exercice 6 : Employé
+
+Pour chaque relation, donnez la clef et ensuite catégorisez les en:
+
+* non normalisé,
+* 1NF,
+* 2NF,
+* 3NF:
+a.	`Employé(numéro employé, nom employé, code emploi)` avec les DF suivantes :
+- `Numéro employé -> nom employé`
+- `Numéro employé -> code emploi`
+
+b.	`Employé(numéro employé, nom employé, (code emploi, années embauché))` avec les DF suivantes :
+- `Numéro employé -> nom employé`
+- `(Numéro employé, code emploi) -> années embauché`
+
+c.	`Employé(numéro employé, nom employé, code emploi, libellé emploi)` avec les DF suivantes :
+- `Numéro employé -> nom employé`
+- `Numéro employé -> code emploi`
+- `Code emploi-> libellé emploi`
+
+d.	`Employé(numéro employé, nom employé, projet, nombre heures travaillé)` avec les DF suivantes :
+- `Numéro employé -> nom employé`
+- `Numéro employé, projet -> nombre heures travaillé`
+
+
+=== Exercice 7 : Bon de Commande
+
+Soit le document suivant qui représente un bon de commande. Produisez le modèle relationnel correspondant en **3ème forme normale**
+
+.Bon de commande
+image::ExoBonCommande.png[Bon commande, width=600, align="center"]
+
+
+=== Exercice 8 : Groupe Musical
+
+Hypothèses : un groupe musical est associé à un genre de musique. Un groupe ne fait pas plus d’une série de concert dans la même salle pour une même année.
+
+1. Soit l’extrait de schéma relationnel en extension suivant :
+
+.Groupe concert
+image::GroupeMusique1.png[Concert 1, width=600, align="center"]
+
+* La relation est-elle en 2NF (2ème forme normale) ?
+* en 3NF ?
+* Déterminez le(s) DF et la clef pour justifier la réponse.
+
+2. La dynamique des concerts et des groupes a changé: voici le nouvel extrait
+
+.Groupe concert modifié
+image::GroupeMusique2.png[Concert 1, width=600, align="center"]
+
+* La relation modifiée est-elle en 2NF ?
+* en 3NF ?
+
+=== Exercice 9 : Transport Maritime
+
+Soit la relation suivante :
+
+`TransportMaritime(bateau, type bateau, identifiant voyage, cargaison, port de destination, date arrivée)`
+
+Considérant les DF suivantes :
+
+* `Bateau -> type bateau`
+* `Identifiant voyage -> (bateau, cargaison)`
+* `(Bateau, date arrivée) -> (identifiant voyage, port de destination)`
+
+Questions:
+
+1.	Quelles sont les clefs possibles de la relation ?
+2.	Proposez une modélisation qui respecte les 3 premières forme normale et BCNF
+
+=== Exercice 10 : Gestion des Postes Informatiques (focus 3NF)
+
+Un établissement gère son parc informatique au niveau du poste.
+
+* Chaque Poste est identifié par son Numéro de Série (NumSérie).
+* Le poste est attribué à un Utilisateur (ID_Utilisateur).
+* L'utilisateur est rattaché à un Service (CodeService).
+* Chaque service a un Nom de Service unique et est géré par un Chef de Service (NomChef).
+
+Relation Initiale :
+
+- `Parc (NumSérie, ID_Utilisateur, NomUtilisateur, CodeService, NomService, NomChef)`
+- Dépendances Fonctionnelles (DF) :
+* `(F1) NumSérie -> (ID_Utilisateur, NomUtilisateur, CodeService)`
+* `(F2) ID_Utilisateur -> (NomUtilisateur, CodeService)`
+* `(F3) CodeService -> (NomService, NomChef)`
+
+Questions :
+1. Déterminez la clé primaire de la relation Parc.
+2. Quelle est la forme normale maximale atteinte par la relation Parc ?
+3. Justifiez votre réponse en identifiant les dépendances problématiques.
+4. Proposez un modèle relationnel en 3ème Forme Normale (3NF) pour éviter les anomalies.
+
+(Point clé : La dépendance transitive `NumSérie -> CodeService -> (NomService,NomChef)` viole la 3NF.)
+
+=== Exercice 11 : Gestion des Inscriptions aux Modules (focus BCNF)
+
+Une association de formation gère les inscriptions aux modules.
+
+* Un Participant est identifié par son ID_Participant.
+* Un Module est identifié par son CodeModule.
+* L'inscription lie un participant à un module (DateInscription).
+* Chaque module est enseigné par un Formateur (NomFormateur).
+* Chaque formateur a une Spécialité unique.
+
+* **Contrainte spécifique** : Bien que plusieurs formateurs puissent enseigner un module, pour un module donné, le CodeModule détermine le NomFormateur principal.
+
+* Et un formateur est rattaché à une seule spécialité.
+
+[.underline]#Relation Initiale# : `Inscription (ID_Participant, CodeModule, DateInscription, NomFormateur, Spécialité)`
+
+[.underline]#Dépendances Fonctionnelles (DF)#  :
+- (F1) `(ID_Participant, CodeModule) -> DateInscription, NomFormateur, Spécialité`
+- (F2) `NomFormateur $\to$ Spécialité`
+- (F3) `CodeModule $\to$ NomFormateur`
+
+[.underline]#Questions# :
+
+1. Déterminez la clé primaire de la relation Inscription.
+2. Identifiez si la relation est en BCNF.
+(Indice : le déterminant de F3 n'est pas une clé candidate).
+
+3. Décomposez la relation en un modèle relationnel qui respecte la Forme Normale de Boyce-Codd (BCNF).
+
+(Point clé : La dépendance `CodeModule -> NomFormateur` est une dépendance entre un non-clé (CodeModule est non-clé dans la clé principale) et un autre non-clé (NomFormateur), ce qui est une violation de BCNF. Il faut extraire l'entité MODULE et l'entité FORMATEUR)
+
+== 🧑‍💻 Exercice Type Étude de Cas : Normalisation UML (2NF et 3NF)
+
+=== Solution (Modèle UML Normalisé en 3NF)
+
+Le modèle final sépare toutes les dépendances fonctionnelles partielles et transitives dans des classes distinctes.
+
+[plantuml, uml-final-normalise, svg]
+----
+skinparam ClassAttributeIconSize 0
+
+class Fournisseur {
+    + idFournisseur (PK)
+    + nom
+    + categorie
+    + RemiseMax
+}
+
+class Article {
+    + codeArticle (PK)
+    + PrixUnitaire
+    + NomCategorieArticle
+}
+
+class Commande {
+    + idCommande (PK)
+    + DateCommande
+    + idFournisseur (FK)
+}
+
+class LigneCommande {
+    + idCommande (PK, FK)
+    + noLigne (PK)
+    + codeArticle (FK)
+    + Quantite
+}
+
+Fournisseur "1" <-- "N" Commande : passe
+Commande "1" --> "N" LigneCommande : contient
+Article "1" <-- "N" LigneCommande : est_pour
+----
