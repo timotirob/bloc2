@@ -780,7 +780,7 @@ class LigneCommande {
     + Quantite
 }
 
-Fournisseur "1" <-- "N" Commande : passe
-Commande "1" --> "N" LigneCommande : contient
-Article "1" <-- "N" LigneCommande : est_pour
+Fournisseur "1" <-- "*" Commande : passe
+Commande "1" --> "*" LigneCommande : contient
+Article "1" <-- "*" LigneCommande : est_pour
 ----
