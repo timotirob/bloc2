@@ -189,3 +189,70 @@ Visite "1" -down- "*" Critere
 Commission "0..1" -left- "*" Visite : Examine >
 
 @enduml
+
+== Partie 3 : Éléments de correction (Version SQL Server)
+
+=== Correction A.2.1 (SQL)
+
+*Requête 1 : Lots donnés réceptionnés en 2019*
+[source, sql]
+----
+SELECT l.id, p.designation, l.nbrProduits
+FROM Lot l
+JOIN Produit p ON l.refProduit = p.reference
+WHERE YEAR(l.dateReception) = 2019
+AND l.etat = 6;
+----
+
+*Requête 2 : Associations sans dons*
+[source, sql]
+----
+SELECT nom, adresse
+FROM AssociationCaritative
+WHERE id NOT IN (SELECT DISTINCT idAssociation FROM FactureDon);
+----
+
+*Requête 3 : Montant cumulé par année et famille*
+[source, sql]
+----
+SELECT YEAR(dateFacture) as Annee, libelle, SUM(valeurMarchandise) as MontantTotal
+FROM ValeurDon
+GROUP BY YEAR(dateFacture), libelle;
+----
+
+=== Correction A.2.2 (Déclencheur T-SQL)
+
+Sous SQL Server, on utilise généralement un trigger `AFTER` (ou `FOR`). On vérifie les données après la tentative de mise à jour. Si elles violent les règles, on annule la transaction (`ROLLBACK`).
+
+On utilise la jointure entre `inserted` (nouvelles valeurs) et `deleted` (anciennes valeurs) pour comparer l'état avant et après.
+
+[source, sql]
+----
+CREATE TRIGGER trg_BeforeUpdate_Lot
+ON Lot
+AFTER UPDATE
+AS
+BEGIN
+    -- On vérifie s'il existe au moins une ligne mise à jour qui viole les règles
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN deleted d ON i.id = d.id
+        WHERE
+            -- Règle 1 : Si l'état était 2, 3 ou 6 (états finaux), il ne doit pas changer
+            (d.etat IN (2, 3, 6) AND i.etat <> d.etat)
+            OR
+            -- Règle 2 : Si l'état était 1 (à vendre), il ne peut aller que vers 1, 2, 3 ou 5
+            (d.etat = 1 AND i.etat NOT IN (1, 2, 3, 5))
+            OR
+            -- Règle 3 : Si l'état était 5 (à donner), il ne peut aller que vers 5, 3 ou 6
+            (d.etat = 5 AND i.etat NOT IN (5, 3, 6))
+    )
+    BEGIN
+        -- Si une règle est violée, on lève une erreur et on annule tout
+        RAISERROR ('Changement d''état du lot interdit par les règles de gestion.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+GO
+----
