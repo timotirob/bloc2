@@ -1,0 +1,191 @@
+
+== Éléments de correction
+
+=== Correction A.2.1 : Requêtes SQL
+
+. **Lots donnés réceptionnés en 2019**
+[source,sql]
+----
+SELECT l.id, p.designation, l.nbrProduits
+FROM Lot l
+JOIN Produit p ON l.refProduit = p.reference
+WHERE YEAR(l.dateReception) = 2019
+AND l.etat = 6;
+----
+
+. **Associations sans dons**
+[source,sql]
+----
+-- Solution avec jointure externe (LEFT JOIN)
+SELECT a.nom, a.adresse
+FROM AssociationCaritative a
+LEFT JOIN FactureDon f ON a.id = f.idAssociation
+WHERE f.numero IS NULL;
+
+-- OU Solution avec sous-requête (NOT IN)
+/*
+SELECT nom, adresse
+FROM AssociationCaritative
+WHERE id NOT IN (SELECT DISTINCT idAssociation FROM FactureDon);
+*/
+/* Ok étude de cas mais pas sur SQL Server- Problème NULL */
+----
+
+. **Montant cumulé par année et famille**
+[source,sql]
+----
+SELECT YEAR(dateFacture) as Annee, libelle, SUM(valeurMarchandise) as MontantTotal
+FROM ValeurDon
+GROUP BY YEAR(dateFacture), libelle;
+----
+
+=== Correction A.2.2 : Déclencheur (`TRIGGER`) MySQL
+
+L'objectif est d'interdire les transitions d'état non prévues, y compris celles impliquant les nouveaux états (5 et 6).
+
+[source,sql]
+----
+CREATE TRIGGER before_update_Lot BEFORE UPDATE ON Lot
+FOR EACH ROW
+BEGIN
+    IF (
+        -- CAS 1: Interdire la modification des états finaux (Vendu:2, Éliminé:3, Donné:6)
+        (OLD.etat IN (2, 3, 6) AND NEW.etat != OLD.etat)
+        OR
+        -- CAS 2: Si 'À vendre' (1), on ne peut aller que vers (2, 3, 5) ou rester à (1)
+        (OLD.etat = 1 AND NEW.etat NOT IN (1, 2, 3, 5))
+        OR
+        -- CAS 3: Si 'À donner' (5), on ne peut aller que vers (3, 6) ou rester à (5)
+        (OLD.etat = 5 AND NEW.etat NOT IN (5, 3, 6))
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Changement d''état du lot interdit';
+    END IF;
+END;
+----
+
+=== Correction C.1.1 : Modélisation des données (MCD/MLD)
+
+La modélisation doit permettre d'enregistrer le résultat (Conforme/Non Conforme) d'un **Critère** spécifique pour une **Visite** donnée.
+
+. **Entités et Relations Clés**
+|===
+| Entité | Attributs
+| Magasin | id, nom, adresse
+| Organisme | id, nom
+| Engagement | id, libelle
+| Critere | id, libelle, #idEngagement (Critère est dépendant de l'Engagement)
+| Commission | id, dateReunion
+| Visite | id, dateVisite, #idMagasin, #idOrganisme, #idEngagement
+| ResultatControle | #idVisite, #idCritere, resultat
+|===
+L'entité `ResultatControle` est la table d'association ternaire (Visite, Engagement, Critère) qui porte l'attribut `resultat` (Conforme/Non Conforme).
+
+. **Structure Relationnelle (MLD - Minimum)**
+[source,sql]
+----
+Magasin (id, nom, ...)
+Organisme (id, nom, ...)
+Engagement (id, libelle, ...)
+Critere (id, libelle, #idEngagement) -- Clé primaire (id, #idEngagement)
+Commission (id, dateReunion)
+
+Visite (id, dateVisite, #idMagasin, #idOrganisme, #idEngagement, #idCommission)
+
+ResultatControle (#idVisite, #idCritere, resultat)
+-- Clé primaire composée (#idVisite, #idCritere)
+-- FK ResultatControle -> Visite
+-- FK ResultatControle -> Critere
+----
+
+@startuml
+' Paramètres de style pour un rendu plus propre
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' --- CLASSES EXISTANTES (Doc 8) ---
+class Societaire {
+- numero : int
+- nom : string
+- mel : string
+}
+
+class Magasin {
+- code : string
+- nom : string
+- adresse : string
+- ville : string
+- codePostal : string
+}
+
+' --- NOUVELLES CLASSES (Dossier C) ---
+
+class Organisme {
+- id : int
+- nom : string
+- adresse : string
+}
+
+class Engagement {
+- id : int
+- nom : string
+- description : text
+}
+
+class Critere {
+- id : int
+- nom : string
+- valeurCible : string
+- moyenControle : string
+}
+
+class Visite {
+- id : int
+- date : Date
+- commentaireOrganisme : text
+- commentaireMagasin : text
+' La décision est stockée ici après passage en commission
+- decisionCommission : string
+}
+
+class Commission {
+- id : int
+- date : Date
+}
+
+' --- CLASSE D'ASSOCIATION ---
+
+class ResultatControle {
+- estConforme : boolean
+- ecartObserve : text
+}
+note right of ResultatControle
+Correspond au détail du contrôle
+pour chaque critère lors d'une visite
+(Conforme / Non Conforme + Écart)
+end note
+
+' --- RELATIONS ---
+
+' Un sociétaire dirige un ou plusieurs magasins
+Societaire "1" -down- "1..*" Magasin : Dirige >
+
+' Une visite concerne un magasin
+Magasin "1" -right- "0..*" Visite : Concerne <
+
+' Une visite est réalisée par un organisme
+Organisme "1" -down- "0..*" Visite : Realise >
+
+' Une visite porte sur un seul engagement
+Visite "*" -down- "1" Engagement : Porte sur >
+
+' Un engagement est composé de plusieurs critères
+Engagement "1" *-down- "1..*" Critere : Compose <
+
+' Gestion des résultats : Lien entre Visite et Critère
+Visite "1" -down- "*" Critere
+(Visite, Critere) .right. ResultatControle
+
+' Une visite est affectée à une commission pour examen
+Commission "0..1" -left- "*" Visite : Examine >
+
+@enduml
