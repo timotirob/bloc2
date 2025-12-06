@@ -168,3 +168,202 @@ La DSI souhaite centraliser les visites de contrôle des magasins.
 
 Proposez un Schéma Conceptuel (*Diagramme de Classes UML* ou Modèle relationnel) intégrant les entités `Magasin`, `Engagement`, `Critere`, `Visite`, `Organisme`, et `Commission`.
 
+
+== Partie 3 : Version SQL Server
+
+*À exécuter dans SQL Server Management Studio (SSMS).*
+
+[source, sql]
+----
+-- =============================================
+-- SCRIPT DE CRÉATION - VERSION SQL SERVER
+-- =============================================
+
+-- Nettoyage préventif (Optionnel)
+IF OBJECT_ID('dbo.LigneFactureDon', 'U') IS NOT NULL DROP TABLE dbo.LigneFactureDon;
+IF OBJECT_ID('dbo.FactureDon', 'U') IS NOT NULL DROP TABLE dbo.FactureDon;
+IF OBJECT_ID('dbo.Lot', 'U') IS NOT NULL DROP TABLE dbo.Lot;
+IF OBJECT_ID('dbo.Produit', 'U') IS NOT NULL DROP TABLE dbo.Produit;
+IF OBJECT_ID('dbo.FamilleProduit', 'U') IS NOT NULL DROP TABLE dbo.FamilleProduit;
+IF OBJECT_ID('dbo.AssociationCaritative', 'U') IS NOT NULL DROP TABLE dbo.AssociationCaritative;
+IF OBJECT_ID('dbo.ValeurDon', 'V') IS NOT NULL DROP VIEW dbo.ValeurDon;
+IF OBJECT_ID('dbo.GetTarif', 'FN') IS NOT NULL DROP FUNCTION dbo.GetTarif;
+GO
+
+-- 1. Création des tables
+CREATE TABLE FamilleProduit (
+    id VARCHAR(5) PRIMARY KEY,
+    libelle VARCHAR(50)
+);
+GO
+
+CREATE TABLE Produit (
+    reference VARCHAR(10) PRIMARY KEY,
+    designation VARCHAR(100),
+    idFamille VARCHAR(5),
+    FOREIGN KEY (idFamille) REFERENCES FamilleProduit(id)
+);
+GO
+
+CREATE TABLE AssociationCaritative (
+    id INT IDENTITY(1,1) PRIMARY KEY, -- AUTO_INCREMENT devient IDENTITY
+    nom VARCHAR(100),
+    adresse VARCHAR(255)
+);
+GO
+
+CREATE TABLE FactureDon (
+    numero INT PRIMARY KEY,
+    dateFacture DATE,
+    idAssociation INT,
+    montantFacture DECIMAL(10,2) DEFAULT 0,
+    FOREIGN KEY (idAssociation) REFERENCES AssociationCaritative(id)
+);
+GO
+
+CREATE TABLE Lot (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    dateReception DATE,
+    nbrProduits INT,
+    etat INT, -- 1: à vendre, 2: vendu, 3: à éliminer, 5: à donner, 6: donné
+    refProduit VARCHAR(10),
+    FOREIGN KEY (refProduit) REFERENCES Produit(reference)
+);
+GO
+
+CREATE TABLE LigneFactureDon (
+    numeroFactureDon INT,
+    numLigne INT,
+    idLot INT,
+    PRIMARY KEY(numeroFactureDon, numLigne),
+    FOREIGN KEY (numeroFactureDon) REFERENCES FactureDon(numero),
+    FOREIGN KEY (idLot) REFERENCES Lot(id)
+);
+GO
+
+-- Simulation de la fonction GetTarif
+-- Note : Les fonctions scalaires doivent être appelées avec le schéma (dbo.)
+CREATE FUNCTION dbo.GetTarif(@refProd VARCHAR(10), @dDate DATE)
+RETURNS DECIMAL(10,2)
+AS
+BEGIN
+    RETURN 2.50; -- Tarif forfaitaire pour l'exercice
+END;
+GO
+
+-- Création de la VUE nécessaire à la mission A.2.1
+CREATE VIEW ValeurDon AS
+SELECT
+    f.dateFacture,
+    fam.libelle,
+    l.nbrProduits * dbo.GetTarif(l.refProduit, f.dateFacture) AS valeurMarchandise
+FROM Produit p
+JOIN FamilleProduit fam ON p.idFamille = fam.id
+JOIN Lot l ON p.reference = l.refProduit
+JOIN LigneFactureDon lfd ON l.id = lfd.idLot
+JOIN FactureDon f ON f.numero = lfd.numeroFactureDon;
+GO
+
+-- 2. Insertion des données
+INSERT INTO FamilleProduit VALUES ('ALI', 'Alimentaire'), ('ULF', 'Ultra-Frais'), ('NAL', 'Non Alimentaire');
+
+INSERT INTO Produit VALUES
+('P001', 'Jus de Pomme Bio', 'ALI'),
+('P002', 'Yaourt Nature', 'ULF'),
+('P003', 'Savon Marseille', 'NAL');
+
+-- Pour insérer un ID explicite dans une colonne IDENTITY, il faut activer IDENTITY_INSERT
+SET IDENTITY_INSERT AssociationCaritative ON;
+INSERT INTO AssociationCaritative (id, nom, adresse) VALUES
+(1, 'Secours Populaire', '10 rue de la Paix'),
+(2, 'Restos du Cœur', '5 avenue de la République'),
+(3, 'Croix Rouge', 'Boulevard Haussmann');
+SET IDENTITY_INSERT AssociationCaritative OFF;
+
+-- Lots reçus en 2019 et 2020
+INSERT INTO Lot (dateReception, nbrProduits, etat, refProduit) VALUES
+('2019-05-01', 100, 6, 'P001'),
+('2019-06-15', 50, 6, 'P002'),
+('2019-12-20', 200, 1, 'P003'),
+('2020-01-10', 100, 6, 'P001'),
+('2020-02-01', 30, 5, 'P002');
+
+INSERT INTO FactureDon VALUES
+(100, '2019-05-10', 1, 0),
+(101, '2019-06-20', 2, 0),
+(102, '2020-01-15', 1, 0);
+
+INSERT INTO LigneFactureDon VALUES
+(100, 1, 1),
+(101, 1, 2),
+(102, 1, 4);
+GO
+----
+
+---
+
+
+=== Mission A.2.1 : Requêtes SQL (Exploitation)
+
+En vous basant sur le schéma relationnel fourni et les données insérées :
+
+. Écrire la requête permettant d'obtenir la liste des lots (*id*, *désignation produit*, *quantité*) **réceptionnés en 2019** et dont l’état est **"lot donné à une association"** (code 6).
+. Écrire la requête permettant d'identifier les associations caritatives (*nom*, *adresse*) **n’ayant jamais reçu de don** (c'est-à-dire ne figurant dans aucune facture de don).
+. En utilisant la vue `ValeurDon`, donner le montant cumulé de la valeur des marchandises données par **année** et par **libellé de famille** de produit.
+
+=== Mission A.2.2 : Programmation SQL (Déclencheurs T-SQL)
+
+Le déclencheur `trg_CheckUpdate_Lot` doit empêcher toute modification d'état illogique.
+
+*Règles de gestion actuelles :*
+
+* *Lot à vendre (1)* ne peut devenir que *Vendu (2)* ou *À éliminer (3)*.
+* *Lot vendu (2)* ne peut plus changer d'état.
+* *Lot à éliminer (3)* ne peut plus changer d'état.
+
+*Nouvelles règles (Gestion des dons) :*
+
+* Un lot *À vendre (1)* peut devenir *À donner (5)*.
+* Un lot *À donner (5)* peut devenir *À éliminer (3)* (si détérioré entre temps) ou *Donné (6)*.
+* Un lot *Donné (6)* est un état final.
+
+*Travail à faire :*
+
+Complétez le script T-SQL ci-dessous pour implémenter ces règles. Vous devez identifier les transitions interdites dans la clause `WHERE`.
+
+[source, sql]
+----
+CREATE TRIGGER trg_CheckUpdate_Lot
+ON Lot
+AFTER UPDATE
+AS
+BEGIN
+    -- 'inserted' contient les nouvelles valeurs après mise à jour
+    -- 'deleted' contient les anciennes valeurs avant mise à jour
+
+    -- On vérifie s'il existe au moins une ligne qui viole les règles de gestion
+    IF EXISTS (
+        SELECT 1
+        FROM inserted i
+        JOIN deleted d ON i.id = d.id
+        WHERE
+            -- A COMPLÉTER : Lister les conditions d'erreur (transitions interdites)
+
+            -- Exemple pour la règle "Lot vendu (2) ne peut plus changer" :
+            (d.etat = 2 AND i.etat <> 2)
+
+            OR
+            -- ... (Ajoutez les autres conditions ici) ...
+
+    )
+    BEGIN
+        -- Si une règle est violée, on lève une erreur et on annule la transaction
+        RAISERROR ('Changement d''état du lot interdit par les règles de gestion.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+GO
+----
+
+---
+
