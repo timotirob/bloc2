@@ -1,0 +1,170 @@
+= TP de Révision : Cas BioCoop (SQL, Déclencheurs, Modélisation)
+:author: Timothée Robert
+:sectnums:
+:toc: left
+:toc-title: Sommaire
+:lang: fr
+
+
+== Introduction
+Ce TP est conçu pour réviser les notions fondamentales du BTS SIO (Dossiers A21, A22 et C11 du cas BioCoop) :
+
+* Le langage *SQL* (requêtes d'exploitation).
+* La programmation *SQL* (Déclencheurs ou Triggers) pour appliquer des règles métiers.
+* La *Modélisation* (MCD/MLD) pour l'évolution d'une base de données.
+
+Contexte de l'étude de cas :
+
+* Vous êtes développeur à la DSI de Biocoop. On vous confie l'intégration de la gestion des dons aux associations (Dossier A) et la refonte du système de suivi des engagements sociétaires (Dossier C).
+
+// --- PARTIE 1 ---
+
+== Partie 1 : Mise en place de l'environnement (Jeu d'essai)
+Les scripts ci-dessous permettent d'initialiser la base de données de travail pour les missions A.2.1 et A.2.2.
+
+=== Script de Création et Insertion des données
+
+[source,sql]
+----
+-- 1. Création des tables (Structure simplifiée Dossier A & B)
+CREATE TABLE FamilleProduit (
+    id VARCHAR(5) PRIMARY KEY,
+    libelle VARCHAR(50)
+);
+
+CREATE TABLE Produit (
+    reference VARCHAR(10) PRIMARY KEY,
+    designation VARCHAR(100),
+    idFamille VARCHAR(5),
+    FOREIGN KEY (idFamille) REFERENCES FamilleProduit(id)
+);
+
+CREATE TABLE AssociationCaritative (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nom VARCHAR(100),
+    adresse VARCHAR(255)
+);
+
+CREATE TABLE FactureDon (
+    numero INT PRIMARY KEY,
+    dateFacture DATE,
+    idAssociation INT,
+    montantFacture DECIMAL(10,2) DEFAULT 0,
+    FOREIGN KEY (idAssociation) REFERENCES AssociationCaritative(id)
+);
+
+CREATE TABLE Lot (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    dateReception DATE,
+    nbrProduits INT,
+    etat INT, -- 1: à vendre, 2: vendu, 3: à éliminer, 5: à donner, 6: donné
+    refProduit VARCHAR(10),
+    FOREIGN KEY (refProduit) REFERENCES Produit(reference)
+);
+
+CREATE TABLE LigneFactureDon (
+    numeroFactureDon INT,
+    numLigne INT,
+    idLot INT,
+    PRIMARY KEY(numeroFactureDon, numLigne),
+    FOREIGN KEY (numeroFactureDon) REFERENCES FactureDon(numero),
+    FOREIGN KEY (idLot) REFERENCES Lot(id)
+);
+
+-- Simulation de la fonction GetTarif (pour simplifier le TP)
+DROP FUNCTION IF EXISTS GetTarif;
+DELIMITER $$
+CREATE FUNCTION GetTarif(refProd VARCHAR(10), dDate DATE) RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    RETURN 2.50; -- Tarif forfaitaire pour l'exercice
+END$$
+DELIMITER ;
+
+-- Création de la VUE nécessaire à la mission A.2.1
+CREATE VIEW ValeurDon AS
+SELECT f.dateFacture, fam.libelle, l.nbrProduits * GetTarif(l.refProduit, f.dateFacture) AS valeurMarchandise
+FROM Produit p
+JOIN FamilleProduit fam ON p.idFamille = fam.id
+JOIN Lot l ON p.reference = l.refProduit
+JOIN LigneFactureDon lfd ON l.id = lfd.idLot
+JOIN FactureDon f ON f.numero = lfd.numeroFactureDon;
+
+-- 2. Insertion des données (Jeu d'essai réaliste)
+INSERT INTO FamilleProduit VALUES ('ALI', 'Alimentaire'), ('ULF', 'Ultra-Frais'), ('NAL', 'Non Alimentaire');
+
+INSERT INTO Produit VALUES
+('P001', 'Jus de Pomme Bio', 'ALI'),
+('P002', 'Yaourt Nature', 'ULF'),
+('P003', 'Savon Marseille', 'NAL');
+
+INSERT INTO AssociationCaritative (id, nom, adresse) VALUES
+(1, 'Secours Populaire', '10 rue de la Paix'),
+(2, 'Restos du Cœur', '5 avenue de la République'),
+(3, 'Croix Rouge', 'Boulevard Haussmann'); -- Celle-ci ne recevra rien (pour le test)
+
+-- Lots reçus en 2019 et 2020
+INSERT INTO Lot (dateReception, nbrProduits, etat, refProduit) VALUES
+('2019-05-01', 100, 6, 'P001'), -- Lot donné (reçu 2019)
+('2019-06-15', 50, 6, 'P002'),  -- Lot donné (reçu 2019)
+('2019-12-20', 200, 1, 'P003'), -- Lot à vendre (reçu 2019)
+('2020-01-10', 100, 6, 'P001'), -- Lot donné (reçu 2020)
+('2020-02-01', 30, 5, 'P002');  -- Lot "à donner" (en attente)
+
+-- Factures de dons (liées aux lots état 6)
+INSERT INTO FactureDon VALUES
+(100, '2019-05-10', 1, 0), -- Don au Secours Populaire
+(101, '2019-06-20', 2, 0), -- Don aux Restos
+(102, '2020-01-15', 1, 0); -- Don au Secours Populaire
+
+INSERT INTO LigneFactureDon VALUES
+(100, 1, 1), -- Lie le lot 1 à la facture 100
+(101, 1, 2), -- Lie le lot 2 à la facture 101
+(102, 1, 4); -- Lie le lot 4 à la facture 102
+----
+
+// --- PARTIE 2 ---
+
+== Partie 2 : Les Missions
+
+=== Mission A.2.1 : Requêtes SQL (Exploitation)
+En vous basant sur le schéma relationnel fourni et les données insérées, écrivez les requêtes SQL :
+
+. Écrire la requête permettant d'obtenir la liste des lots (*id*, *désignation produit*, *quantité*) **réceptionnés en 2019** et dont l’état est *"lot donné à une association"* (code **6**).
+. Écrire la requête permettant d'identifier les associations caritatives (*nom*, *adresse*) **n’ayant jamais reçu de don** (c'est-à-dire ne figurant dans aucune facture de don).
+. En utilisant la vue `ValeurDon`, donner le montant cumulé de la valeur des marchandises données par **année** et par **libellé de famille** de produit.
+
+=== Mission A.2.2 : Programmation SQL (Déclencheurs)
+Le déclencheur `before_update_Lot` actuel empêche toute modification d'état illogique.
+
+*Règles de gestion initiales (existant) :*
+
+* *Lot à vendre (1)* ne peut devenir que *Vendu (2)* ou *À éliminer (3)*.
+* *Lot vendu (2)* ne peut plus changer d'état.
+* *Lot à éliminer (3)* ne peut plus changer d'état.
+
+*Nouvelles règles à intégrer (Gestion des dons) :*
+
+* Un lot *À vendre (1)* peut devenir *À donner (5)*.
+* Un lot *À donner (5)* peut devenir *À éliminer (3)* ou *Donné (6)*.
+* Un lot *Donné (6)* est un état final.
+
+*Travail à faire :*
+
+Écrire le code complet du déclencheur modifié (ou de la structure `IF`) pour intégrer ces nouvelles règles tout en conservant les anciennes restrictions.
+
+=== Mission C.1.1 : Modélisation des données (MCD/MLD)
+La DSI souhaite centraliser les visites de contrôle des magasins.
+
+*Règles de gestion :*
+
+* Une **Visite** concerne un **Magasin** et porte sur un seul **Engagement** spécifique.
+* Une visite est réalisée par un **Organisme** externe à une date donnée.
+* Un engagement est composé de plusieurs **Critères**.
+* Lors d'une visite, chaque critère de l'engagement reçoit un **Résultat** (Conforme / Non Conforme).
+* Une visite est ensuite examinée par une **Commission** (qui se réunit à une date précise). La commission rend une **Décision** pour la visite.
+
+*Travail à faire :*
+
+Proposez un Schéma Conceptuel (*Diagramme de Classes UML* ou Modèle relationnel) intégrant les entités `Magasin`, `Engagement`, `Critere`, `Visite`, `Organisme`, et `Commission`.
+
