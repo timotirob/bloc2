@@ -1,0 +1,218 @@
+= TP : Cybersécurité et SGBD - Cas Kirassur (Dossier A)
+:author: Timothée Robert d'après EDC Kirassur
+:doctype: article
+:icons: font
+:source-highlighter: rouge
+:toc: left
+:toc-title: Sommaire
+
+== Contexte Général
+
+Vous êtes développeur au sein de **Tecassur**, la filiale informatique de la compagnie d'assurance **Kirassur**.
+
+L'entreprise fait face à une recrudescence de fraudes, notamment sur les sinistres de type **"Bris de glace"**. Des garagistes ou des assurés malveillants déclarent plusieurs fois le même sinistre ou abusent de cette garantie.
+
+Votre mission consiste à implémenter des mécanismes de sécurité directement dans la base de données pour :
+
+.   Détecter automatiquement les déclarations abusives lors de l'insertion d'un dossier.
+.   Adapter l'interface de gestion pour prioriser les dossiers suspects.
+
+== Partie 1 : Mise en place de l'environnement
+
+Vous devez initialiser la base de données avec un jeu d'essai réaliste permettant de tester les règles de gestion (période de 90 jours, seuil de sinistres, etc.).
+
+[NOTE]
+====
+Le script ci-dessous crée les tables nécessaires et injecte des données variées :
+
+* Des contrats "propres".
+* Des contrats "à risque" (proches du seuil).
+* Des historiques anciens (hors période de contrôle).
+====
+
+[source,sql]
+----
+-- ============================================================
+-- 1. STRUCTURE DE LA BASE (Extrait simplifié Kirassur)
+-- ============================================================
+
+DROP TABLE IF EXISTS Sinistre;
+DROP TABLE IF EXISTS Contrat;
+DROP TABLE IF EXISTS Garantie;
+DROP TABLE IF EXISTS Gestionnaire;
+DROP TABLE IF EXISTS Assure;
+
+CREATE TABLE Assure (
+    id INT PRIMARY KEY,
+    nom VARCHAR(32),
+    prenom VARCHAR(32),
+    ville VARCHAR(50)
+);
+
+CREATE TABLE Gestionnaire (
+    id INT PRIMARY KEY,
+    nom VARCHAR(50),
+    login VARCHAR(50)
+);
+
+CREATE TABLE Garantie (
+    id INT PRIMARY KEY,
+    libelle VARCHAR(100),
+    nbMaxSinistresPeriode INT NULL, -- Seuil autorisé
+    nbJoursPeriode INT NULL         -- Période glissante en jours
+);
+
+CREATE TABLE Contrat (
+    id INT PRIMARY KEY,
+    dateSignature DATE,
+    idAssure INT,
+    FOREIGN KEY (idAssure) REFERENCES Assure(id)
+);
+
+CREATE TABLE Sinistre (
+    idContrat INT,
+    numero INT,
+    description TEXT,
+    dateSinistre DATETIME,
+    dateDeclaration DATETIME,
+    idGestionnaire INT,
+    idGarantie INT,
+    dateReglement DATETIME NULL,
+    aVerifier CHAR(1) DEFAULT 'N', -- 'O' = Oui (Suspect), 'N' = Non
+    PRIMARY KEY (idContrat, numero),
+    FOREIGN KEY (idContrat) REFERENCES Contrat(id),
+    FOREIGN KEY (idGestionnaire) REFERENCES Gestionnaire(id),
+    FOREIGN KEY (idGarantie) REFERENCES Garantie(id)
+);
+
+-- ============================================================
+-- 2. JEU D'ESSAI ENRICHI
+-- ============================================================
+
+-- A. Les Assurés
+INSERT INTO Assure VALUES
+(1, 'Martin', 'Pierre', 'Paris'),
+(2, 'Durand', 'Sophie', 'Lyon'),
+(3, 'Dupont', 'Marc', 'Marseille'), -- Le "chat noir" (beaucoup de sinistres)
+(4, 'Lemoine', 'Julie', 'Lille');   -- L'ancienne cliente
+
+-- B. Les Gestionnaires
+INSERT INTO Gestionnaire VALUES
+(10, 'Bourdin', 'jules.bourdin@kirassur.com'),
+(20, 'Riviere', 'alice.riviere@kirassur.com');
+
+-- C. Les Garanties
+-- Seul le Bris de Glace (ID 3) est surveillé (max 2 sinistres sur 90 jours)
+INSERT INTO Garantie VALUES
+(1, 'Responsabilité civile', NULL, NULL),
+(2, 'Vol', NULL, NULL),
+(3, 'Bris de glace', 2, 90),
+(4, 'Dégâts matériels', NULL, NULL);
+
+-- D. Les Contrats
+INSERT INTO Contrat VALUES
+(100, '2020-01-01', 1), -- Contrat Pierre
+(200, '2021-06-15', 2), -- Contrat Sophie
+(300, '2022-03-10', 3), -- Contrat Marc (Suspect)
+(400, '2019-11-20', 4); -- Contrat Julie
+
+-- E. Historique des Sinistres (Situations variées)
+
+-- Cas 1 : Pierre (Contrat 100) - Client sans problème
+-- Un petit sinistre "Vol" il y a 6 mois.
+INSERT INTO Sinistre VALUES
+(100, 1, 'Vol autoradio', NOW() - INTERVAL 180 DAY, NOW() - INTERVAL 179 DAY, 10, 2, '2023-10-01', 'N');
+
+-- Cas 2 : Julie (Contrat 400) - Beaucoup de sinistres, mais ANCIENS (Hors période 90j)
+-- Elle a eu 2 bris de glace, mais il y a 4 et 5 mois. Elle ne doit PAS être bloquée aujourd'hui.
+INSERT INTO Sinistre VALUES
+(400, 1, 'Impact A1', NOW() - INTERVAL 150 DAY, NOW() - INTERVAL 149 DAY, 20, 3, '2023-11-01', 'N'),
+(400, 2, 'Impact A6', NOW() - INTERVAL 120 DAY, NOW() - INTERVAL 119 DAY, 20, 3, '2023-12-01', 'N');
+
+-- Cas 3 : Sophie (Contrat 200) - Comportement limite
+-- Elle a déjà 1 bris de glace récent (il y a 30 jours).
+-- Si elle en déclare un aujourd'hui, c'est le 2ème => OK.
+-- Si elle en déclare un troisième demain => ALERTE.
+INSERT INTO Sinistre VALUES
+(200, 1, 'Fissure pare-brise', NOW() - INTERVAL 30 DAY, NOW() - INTERVAL 29 DAY, 10, 3, '2024-01-15', 'N');
+
+-- Cas 4 : Marc (Contrat 300) - Le fraudeur potentiel
+-- Il a déjà 2 bris de glace récents (10 jours et 60 jours).
+-- Le prochain bris de glace DOIT déclencher l'alerte.
+-- Il a aussi un sinistre "Responsabilité civile" (ne doit pas interférer).
+INSERT INTO Sinistre VALUES
+(300, 1, 'Choc parking', NOW() - INTERVAL 80 DAY, NOW() - INTERVAL 79 DAY, 10, 1, '2024-01-10', 'N'), -- RC
+(300, 2, 'Optique avant cassé', NOW() - INTERVAL 60 DAY, NOW() - INTERVAL 59 DAY, 10, 3, '2024-01-20', 'N'), -- Bris Glace 1
+(300, 3, 'Vitre latérale', NOW() - INTERVAL 10 DAY, NOW() - INTERVAL 9 DAY, 10, 3, NULL, 'N');          -- Bris Glace 2
+----
+
+== Partie 2 : Missions à réaliser
+
+=== Mission A.1 : Automatisation du contrôle (Le Trigger)
+
+Une règle de gestion a été décidée : **"Si le nombre de sinistres 'Bris de glace' déclarés pour un contrat sur une période de 90 jours dépasse 2, tout nouveau sinistre de ce type doit être marqué 'À vérifier'."**
+
+Vous disposez du squelette de code ci-dessous.
+
+.   **Analyse :**
+* Le déclencheur est de type `BEFORE INSERT`. Pourquoi ce choix plutôt que `AFTER INSERT` ?
+* À quoi sert la fonction `SUBDATE` utilisée dans le code ?
+.   **Développement :**
+* Copiez le code ci-dessous.
+* Complétez la partie manquante (indiquée par `-- A COMPLÉTER`) pour implémenter la logique de décision.
+* Optimisez le code pour que la requête de comptage ne s'exécute **que** si la garantie concernée est bien "Bris de glace" (ou ID 3).
+.   **Tests de validation (avec le jeu d'essai) :**
+* Tentez d'insérer un nouveau "Bris de glace" pour **Julie (Contrat 400)**. Résultat attendu : `aVerifier = 'N'` (Ses sinistres sont vieux).
+* Tentez d'insérer un nouveau "Bris de glace" pour **Marc (Contrat 300)**. Résultat attendu : `aVerifier = 'O'` (C'est son 3ème en moins de 90 jours).
+
+[source,sql]
+----
+DELIMITER $$
+CREATE TRIGGER controleSinistre
+BEFORE INSERT ON Sinistre FOR EACH ROW
+BEGIN
+    DECLARE nbSinDeclare int;
+    DECLARE dateDebPeriode datetime;
+    DECLARE nbJours int;
+    DECLARE nbMaxSinistres int;
+    DECLARE libelleGarantie varchar(100);
+
+    -- 1. Récupération des paramètres de la garantie concernée par le sinistre inséré
+    SELECT libelle, nbMaxSinistresPeriode, nbJoursPeriode
+    INTO libelleGarantie, nbMaxSinistres, nbJours
+    FROM Garantie
+    WHERE id = NEW.idGarantie;
+
+    -- 2. Calcul de la date de début de période (Date du sinistre - X jours)
+    SET dateDebPeriode = SUBDATE(NEW.dateSinistre, INTERVAL nbJours DAY);
+
+    -- 3. Comptage des sinistres précédents sur cette période pour ce contrat
+    SELECT count(*) INTO nbSinDeclare
+    FROM Sinistre
+    JOIN Garantie ON Garantie.id = Sinistre.idGarantie
+    WHERE Sinistre.idContrat = NEW.idContrat
+      AND Garantie.libelle = "Bris de glace"
+      AND dateSinistre >= dateDebPeriode
+      AND dateSinistre <= NEW.dateSinistre;
+
+    -- 4. Logique de décision
+    -- A COMPLÉTER : Si le quota est atteint, on force le statut à 'O'
+
+END$$
+DELIMITER ;
+----
+
+=== Mission A.2 : Tableau de bord des sinistres suspects
+
+Le gestionnaire **Jules Bourdin (ID 10)** a besoin d'une vue synthétique pour traiter ses dossiers urgents.
+
+**Travail à faire :**
+
+Écrire la requête SQL permettant d'afficher la liste des dossiers selon les critères suivants :
+
+* Le dossier est géré par Jules Bourdin (`idGestionnaire = 10`).
+* Le dossier n'est pas encore réglé (`dateReglement` est NULL).
+* La garantie concernée est uniquement "Bris de glace".
+* **Affichage demandé :** Numéro de contrat, Nom de l'assuré, Date de déclaration, Libellé garantie, Statut "À vérifier".
+* **Tri obligatoire :** Les dossiers suspects (`aVerifier = 'O'`) doivent apparaître **en tout premier**, suivis des dossiers normaux. Au sein de ces groupes, trier par date de déclaration (du plus ancien au plus récent).
+
