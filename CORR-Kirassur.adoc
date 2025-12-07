@@ -1,0 +1,91 @@
+== Éléments de Correction
+
+=== Correction Mission A.1 (Trigger)
+
+[TIP]
+Le choix de `BEFORE INSERT` est crucial : il permet de modifier les données (`SET NEW.aVerifier`) **avant** qu'elles ne soient écrites physiquement sur le disque. Avec un `AFTER`, il faudrait faire un `UPDATE` supplémentaire, ce qui est moins performant et risque de créer une boucle infinie.
+
+[source,sql]
+----
+DROP TRIGGER IF EXISTS controleSinistre;
+DELIMITER $$
+
+CREATE TRIGGER controleSinistre
+BEFORE INSERT ON Sinistre FOR EACH ROW
+BEGIN
+    DECLARE nbSinDeclare int;
+    DECLARE dateDebPeriode datetime;
+    DECLARE nbJours int;
+    DECLARE nbMaxSinistres int;
+    DECLARE libelleGarantie varchar(100);
+
+    -- Récupération infos
+    SELECT libelle, nbMaxSinistresPeriode, nbJoursPeriode
+    INTO libelleGarantie, nbMaxSinistres, nbJours
+    FROM Garantie
+    WHERE id = NEW.idGarantie;
+
+    -- OPTIMISATION : On ne déclenche la logique lourde QUE pour le Bris de Glace
+    IF libelleGarantie = 'Bris de glace' THEN
+        -- Calcul date début période glissante
+        SET dateDebPeriode = SUBDATE(NEW.dateSinistre, INTERVAL nbJours DAY);
+
+        -- Comptage des sinistres existants
+        SELECT count(*) INTO nbSinDeclare
+        FROM Sinistre
+        JOIN Garantie ON Garantie.id = Sinistre.idGarantie
+        WHERE Sinistre.idContrat = NEW.idContrat
+        AND Garantie.libelle = "Bris de glace"
+        AND dateSinistre >= dateDebPeriode
+        AND dateSinistre <= NEW.dateSinistre;
+
+        -- LOGIQUE DE DÉCISION
+        -- Si on a déjà atteint (ou dépassé) le max en base, ce nouveau sinistre est de trop.
+        IF nbSinDeclare >= nbMaxSinistres THEN
+            SET NEW.aVerifier = 'O';
+        ELSE
+            SET NEW.aVerifier = 'N';
+        END IF;
+
+    END IF;
+END$$
+DELIMITER ;
+----
+
+*Validation des tests :*
+
+[source,sql]
+----
+-- Test Julie (Contrat 400) : Sinistres anciens -> Pas d'alerte attendue
+INSERT INTO Sinistre (idContrat, numero, description, dateSinistre, dateDeclaration, idGestionnaire, idGarantie)
+VALUES (400, 3, 'Test Julie OK', NOW(), NOW(), 20, 3);
+
+-- Test Marc (Contrat 300) : Déjà 2 récents -> Alerte attendue ('O')
+INSERT INTO Sinistre (idContrat, numero, description, dateSinistre, dateDeclaration, idGestionnaire, idGarantie)
+VALUES (300, 4, 'Test Marc FRAUDE', NOW(), NOW(), 10, 3);
+
+-- Vérification
+SELECT idContrat, numero, aVerifier FROM Sinistre WHERE description LIKE 'Test%';
+----
+
+=== Correction Mission A.2 (Requête Dashboard)
+
+[source,sql]
+----
+SELECT
+    Contrat.id AS RefContrat,
+    Assure.nom AS NomAssure,
+    Sinistre.dateDeclaration,
+    Garantie.libelle,
+    Sinistre.aVerifier
+FROM Contrat
+INNER JOIN Sinistre ON Contrat.id = Sinistre.idContrat
+INNER JOIN Garantie ON Garantie.id = Sinistre.idGarantie
+INNER JOIN Assure ON Contrat.idAssure = Assure.id
+WHERE Sinistre.dateReglement IS NULL
+  AND Sinistre.idGestionnaire = 10 -- Filtre gestionnaire connecté
+  AND Garantie.libelle = 'Bris de glace' -- Filtre métier
+ORDER BY
+    Sinistre.aVerifier DESC, -- 'O' arrive avant 'N' dans l'ordre décroissant alphabétique
+    Sinistre.dateDeclaration ASC;
+----
