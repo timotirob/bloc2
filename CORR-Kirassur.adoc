@@ -89,3 +89,171 @@ ORDER BY
     Sinistre.aVerifier DESC, -- 'O' arrive avant 'N' dans l'ordre décroissant alphabétique
     Sinistre.dateDeclaration ASC;
 ----
+
+== Correction Mission C2.1 : Modélisation des Données (Cas Kirassur)
+
+== Contexte de la mission
+
+La mission consiste à finaliser le schéma des données pour intégrer les évolutions liées à la gestion des profils, la hiérarchie des utilisateurs et la supervision des actions sensibles (alertes).
+
+[NOTE]
+====
+Les évolutions principales identifiées dans le dossier C sont :
+* La distinction **Gestionnaire / Responsable** .
+* L'ajout des **Profils** regroupant des actions.
+* La gestion de la temporalité (dates de début/fin) pour les profils et habilitations.
+* La définition des seuils pour les **Actions Sensibles**.
+* Le cycle de vie des **Alertes** .
+====
+
+---
+
+== 1. Schéma Relationnel (Textuel)
+
+Voici la proposition de schéma relationnel normalisé.
+_Convention : **Clé Primaire**, #Clé Étrangère._
+
+* **Utilisateur** (**id**, login, motDePasse, nom, prenom)
+* **Responsable** (**#id**)
+** _Héritage_ : L'identifiant référence `Utilisateur(id)`.
+* **Gestionnaire** (**#id**, #idResponsable)
+** _Héritage_ : L'identifiant référence `Utilisateur(id)`.
+** _Hiérarchie_ : `idResponsable` référence `Responsable(id)` (Un gestionnaire est encadré par un responsable).
+
+* **Profil** (**id**, libelle)
+* **Action** (**id**, libelle, etiquette)
+* **ActionSensible** (**#id**, intervalleSurveillance, nbMaxAppels)
+** _Héritage_ : L'identifiant référence `Action(id)`.
+** Ajout des seuils de détection.
+
+* **Alerte** (**id**, dateDeclenchement, etat, dateAffectation, #idUtilisateurDeclencheur, #idActionSensible, #idResponsableTraitant)
+** `etat` : Prend les valeurs 'nouvelle', 'affectée', 'résolue', 'classée'.
+** `idResponsableTraitant` : Peut être NULL tant que l'alerte n'est pas prise en charge.
+
+* **Contenir** (**#idProfil, #idAction**)
+** Table de liaison : Un profil contient plusieurs actions.
+
+* **AttribuerProfil** (**#idUtilisateur, #idProfil**, dateDebut, dateFin)
+** Gestion de l'historique : Un profil est attribué pour une période donnée.
+
+* **HabiliterPonctuellement** (**#idUtilisateur, #idAction**, dateDebut, dateFin)
+** Maintien du système actuel pour les exceptions.
+
+* **Log** (**id**, horodatage, #idUtilisateur, #idActionSensible)
+** Trace brute des actions sensibles.
+
+
+
+== 2. Diagramme de Classes (UML)
+
+Ce diagramme, réalisé avec **PlantUML**, montre les relations d'héritage et les associations temporelles.
+
+[source, plantuml]
+----
+@startuml
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide circle
+
+' --- CLASSES UTILISATEURS ---
+class Utilisateur {
+  - id : int
+  - login : string
+  - motDePasse : string
+  - nom : string
+  - prenom : string
+}
+
+class Responsable {
+}
+
+class Gestionnaire {
+}
+
+' Héritage
+Utilisateur <|-- Responsable
+Utilisateur <|-- Gestionnaire
+
+' Un gestionnaire est encadré par un responsable
+Responsable "1" -left- "*" Gestionnaire : Encadrer >
+
+' --- PROFILS & ACTIONS ---
+class Profil {
+  - id : int
+  - libelle : string
+}
+
+class Action {
+  - id : int
+  - libelle : string
+  - etiquette : string
+}
+
+class ActionSensible {
+  - intervalleSurveillance : int
+  - nbMaxAppels : int
+}
+
+' Héritage Action
+Action <|-- ActionSensible
+
+' Relation Profil contient Actions
+Profil "0..*" -- "1..*" Action : Contenir >
+
+' --- CLASSES D'ASSOCIATION (Habilitations) ---
+
+class AttributionProfil {
+  - dateDebut : DateTime
+  - dateFin : DateTime
+}
+' Un profil est attribué à un utilisateur sur une période
+(Utilisateur, Profil) .. AttributionProfil
+
+class HabilitationPonctuelle {
+  - dateDebut : DateTime
+  - dateFin : DateTime
+}
+' Une action peut être attribuée ponctuellement
+(Utilisateur, Action) .. HabilitationPonctuelle
+
+' --- LOGS & ALERTES ---
+
+class Log {
+  - id : int
+  - horodatage : DateTime
+}
+
+' Un log enregistre une action sensible faite par un user
+Utilisateur "1" -- "*" Log : Générer >
+Log "*" -- "1" ActionSensible : Concerner >
+
+class Alerte {
+  - id : int
+  - dateDeclenchement : DateTime
+  - etat : string
+  - dateAffectation : DateTime
+}
+note right of Alerte : Etat : nouvelle, affectée,\nrésolue, classée
+
+' Une alerte est déclenchée par un utilisateur sur une action sensible
+Utilisateur "1" -down- "*" Alerte : Déclencher >
+Alerte "*" -left- "1" ActionSensible : Concerner >
+
+' Une alerte est traitée par un responsable
+Responsable "0..1" -right- "*" Alerte : Traiter >
+
+@enduml
+----
+
+
+== 3. Justifications des choix de modélisation
+
+. **Héritage Gestionnaire / Responsable :**
+Les responsables ont des accès spécifiques (traitement des alertes, encadrement). L'association réflexive ou hiérarchique `Encadrer` permet de lier un gestionnaire à son N+1.
+
+. **Attribution des Profils :**
+Le sujet précise que l'attribution est bornée dans le temps ("du 1 juillet 2022 au 30 juin 2026"). Il est donc impératif d'utiliser une classe d'association (ou relation porteuse de données) `AttributionProfil` avec `dateDebut` et `dateFin`.
+
+. **Alertes vs Logs :**
+* Le **Log** est une trace technique systématique.
+* L'**Alerte** est un objet métier créé par analyse des logs. [cite_start]Elle a un état ("nouvelle", "affectée"...) et doit être reliée à un `Responsable` pour suivi [cite: 694-695].
